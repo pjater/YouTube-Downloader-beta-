@@ -1,0 +1,16 @@
+{
+  "download_folder": "C:\\Users\\Pjotr Evers\\OneDrive\\laptop code\\yt_downloader_web\\downloads",
+  "always_ask_location": false,
+  "default_video_quality": "1080p",
+  "default_video_format": "mp4",
+  "default_fps": "60",
+  "default_audio_bitrate": "320",
+  "default_audio_format": "mp3",
+  "last_used": {
+    "video_quality": "1080p",
+    "video_format": "mp4",
+    "fps": "60",
+    "audio_bitrate": "192",
+    "audio_format": "mp3"
+  }
+}
