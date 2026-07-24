@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
 YouTube Downloader Web App - Backend Server
-Provides API endpoints for downloading videos and audio
 """
 
 import os
@@ -9,10 +8,9 @@ import sys
 import json
 import threading
 import uuid
-import subprocess
 from pathlib import Path
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Dict, Any, List
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
@@ -26,31 +24,35 @@ HISTORY_FILE = BASE_DIR / "download_history.json"
 DOWNLOADS_DIR = BASE_DIR / "downloads"
 FFMPEG_PATH = BASE_DIR / "ffmpeg.exe"
 
-# Ensure directories exist
 DOWNLOADS_DIR.mkdir(exist_ok=True)
 
-# Check if ffmpeg is available
+# Check ffmpeg
 ffmpeg_available = FFMPEG_PATH.exists()
 if not ffmpeg_available:
-    # Also check PATH
     import shutil
     ffmpeg_available = shutil.which("ffmpeg") is not None
 if ffmpeg_available:
-    print(f"FFmpeg found at: {FFMPEG_PATH if FFMPEG_PATH.exists() else 'system PATH'}")
+    print(f"FFmpeg found: {'system PATH' if not FFMPEG_PATH.exists() else FFMPEG_PATH}")
 else:
-    print("WARNING: ffmpeg not found. Video downloads that need merging may fail.")
-    print("Place ffmpeg.exe in the application folder for full functionality.")
+    print("WARNING: ffmpeg not found")
 
 # ===== FASTAPI APP =====
 app = FastAPI(title="YouTube Downloader API")
 
 # Mount static files
-app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
+static_dir = BASE_DIR / "static"
+print(f"Static directory: {static_dir}")
+print(f"Static exists: {static_dir.exists()}")
+if static_dir.exists():
+    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+    print("Static files mounted")
+else:
+    print(f"ERROR: Static directory not found at {static_dir}")
 
 # ===== MODELS =====
 class DownloadRequest(BaseModel):
     url: str
-    mode: str  # "video" or "audio"
+    mode: str
     quality: str = "best"
     format: str = "mp4"
     fps: str = "30"
@@ -71,12 +73,11 @@ class ConfigUpdate(BaseModel):
     default_audio_format: str = "mp3"
 
 # ===== GLOBAL STATE =====
-active_downloads = {}
+active_downloads: Dict[str, Dict[str, Any]] = {}
 download_lock = threading.Lock()
 
 # ===== CONFIG MANAGEMENT =====
-def load_config():
-    """Load configuration from JSON file"""
+def load_config() -> Dict[str, Any]:
     default_config = {
         "download_folder": str(DOWNLOADS_DIR),
         "always_ask_location": False,
@@ -99,41 +100,37 @@ def load_config():
             with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
                 loaded = json.load(f)
                 default_config.update(loaded)
-        except:
+        except Exception:
             pass
     return default_config
 
-def save_config(config):
-    """Save configuration to JSON file"""
+def save_config(config: Dict[str, Any]) -> None:
     try:
         with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
             json.dump(config, f, indent=2, ensure_ascii=False)
-    except:
+    except Exception:
         pass
 
-def load_history():
-    """Load download history"""
+def load_history() -> List[Dict[str, Any]]:
     if HISTORY_FILE.exists():
         try:
             with open(HISTORY_FILE, 'r', encoding='utf-8') as f:
                 return json.load(f)
-        except:
+        except Exception:
             pass
     return []
 
-def save_history(history):
-    """Save download history"""
+def save_history(history: List[Dict[str, Any]]) -> None:
     try:
         with open(HISTORY_FILE, 'w', encoding='utf-8') as f:
             json.dump(history, f, indent=2, ensure_ascii=False)
-    except:
+    except Exception:
         pass
 
-def add_to_history(title, mode, quality, format_type, fps=None, bitrate=None, path=""):
-    """Add download to history"""
+def add_to_history(title: str, mode: str, quality: str, format_type: str, fps: Optional[str] = None, bitrate: Optional[str] = None, path: str = ""):
     history = load_history()
     entry = {
-        "title": title,
+        "title": title or "Unknown",
         "mode": mode,
         "quality": quality,
         "format": format_type,
@@ -153,17 +150,27 @@ def add_to_history(title, mode, quality, format_type, fps=None, bitrate=None, pa
 @app.get("/")
 async def root():
     """Serve the main HTML file"""
-    return FileResponse(BASE_DIR / "static" / "index.html")
+    index_file = BASE_DIR / "static" / "index.html"
+    if index_file.exists():
+        return FileResponse(index_file)
+    return JSONResponse({"error": "index.html not found"}, status_code=404)
+
+# Serve static files
+@app.get("/static/{file_path:path}")
+async def serve_static(file_path: str):
+    """Serve static files"""
+    full_path = static_dir / file_path
+    if full_path.exists() and full_path.is_file():
+        return FileResponse(full_path)
+    return JSONResponse({"error": "Not found"}, status_code=404)
 
 @app.get("/api/config")
 async def get_config():
-    """Get current configuration"""
     config = load_config()
     return JSONResponse(config)
 
 @app.post("/api/config")
 async def update_config(config: ConfigUpdate):
-    """Update configuration"""
     current = load_config()
     current.update(config.model_dump())
     save_config(current)
@@ -171,23 +178,17 @@ async def update_config(config: ConfigUpdate):
 
 @app.get("/api/history")
 async def get_history():
-    """Get download history"""
     history = load_history()
     return JSONResponse(history)
 
 @app.delete("/api/history")
 async def clear_history():
-    """Clear download history"""
     save_history([])
     return JSONResponse({"status": "success", "message": "History cleared"})
 
 @app.post("/api/video-info")
 async def get_video_info(request: VideoInfoRequest):
-    """Get video information"""
     try:
-        # Use a simpler approach with yt-dlp
-        import yt_dlp
-        
         ydl_opts = {
             'quiet': True,
             'no_warnings': True,
@@ -199,19 +200,16 @@ async def get_video_info(request: VideoInfoRequest):
         }
         
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            # Extract info without downloading
             info = ydl.extract_info(request.url, download=False, process=True)
             
             if not info:
                 raise HTTPException(status_code=400, detail="Could not extract video information")
             
-            # Extract relevant information
-            title = info.get('title', 'Unknown')
-            uploader = info.get('uploader', 'Unknown')
-            duration = info.get('duration', 0) or 0
-            view_count = info.get('view_count', 0) or 0
+            title = info.get('title') or 'Unknown'
+            uploader = info.get('uploader') or 'Unknown'
+            duration = info.get('duration') or 0
+            view_count = info.get('view_count') or 0
             
-            # Format duration
             if duration > 0:
                 hours, remainder = divmod(int(duration), 3600)
                 minutes, seconds = divmod(remainder, 60)
@@ -219,8 +217,7 @@ async def get_video_info(request: VideoInfoRequest):
             else:
                 duration_str = "Unknown"
             
-            # Get best quality
-            formats = info.get('formats', [])
+            formats = info.get('formats') or []
             best_quality = "?"
             for fmt in formats:
                 if fmt.get('vcodec') != 'none' and fmt.get('height'):
@@ -241,12 +238,9 @@ async def get_video_info(request: VideoInfoRequest):
     except HTTPException:
         raise
     except Exception as e:
-        import traceback
         error_msg = str(e)
         print(f"Video info error: {error_msg}")
-        print(traceback.format_exc())
         
-        # Provide user-friendly error messages
         if "RequestsResponseAdapter" in error_msg or "_http_error" in error_msg:
             error_msg = "Network error. Please check your internet connection and try again."
         elif "Private video" in error_msg:
@@ -258,10 +252,8 @@ async def get_video_info(request: VideoInfoRequest):
 
 @app.post("/api/download")
 async def start_download(request: DownloadRequest):
-    """Start a download"""
     download_id = str(uuid.uuid4())
     
-    # Determine output path
     if request.output_path:
         output_path = Path(request.output_path)
     else:
@@ -270,7 +262,6 @@ async def start_download(request: DownloadRequest):
     
     output_path.mkdir(parents=True, exist_ok=True)
     
-    # Create download entry
     with download_lock:
         active_downloads[download_id] = {
             "id": download_id,
@@ -284,7 +275,6 @@ async def start_download(request: DownloadRequest):
             "error": None
         }
     
-    # Start download in background thread
     def download_thread():
         try:
             if request.mode == "video":
@@ -302,8 +292,7 @@ async def start_download(request: DownloadRequest):
     
     return JSONResponse({"download_id": download_id, "status": "started"})
 
-def download_video(download_id, request, output_path):
-    """Download video"""
+def download_video(download_id: str, request: DownloadRequest, output_path: Path):
     try:
         with download_lock:
             active_downloads[download_id]["status"] = "downloading"
@@ -312,7 +301,6 @@ def download_video(download_id, request, output_path):
         fmt = request.format
         fps = request.fps
         
-        # Build format selector
         if quality == "best":
             format_selector = "bestvideo+bestaudio/best"
         elif quality == "worst":
@@ -324,7 +312,6 @@ def download_video(download_id, request, output_path):
             else:
                 format_selector = "bestvideo+bestaudio/best"
         
-        # Add FPS filter if selected
         if fps and fps != "30":
             format_selector = format_selector.replace("bestvideo", f"bestvideo[fps={fps}]")
         
@@ -345,14 +332,13 @@ def download_video(download_id, request, output_path):
                                 active_downloads[download_id]["progress"] = progress
                                 active_downloads[download_id]["speed"] = speed
                                 active_downloads[download_id]["eta"] = eta
-                except:
+                except Exception:
                     pass
             elif d["status"] == "finished":
                 with download_lock:
                     if download_id in active_downloads:
                         active_downloads[download_id]["progress"] = 95
                         active_downloads[download_id]["status"] = "converting"
-                # Store the downloaded filename
                 nonlocal downloaded_file_path
                 downloaded_file_path = d.get('filename')
         
@@ -367,24 +353,21 @@ def download_video(download_id, request, output_path):
         
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(request.url, download=True)
-            title = info.get('title', 'Unknown')
+            title = info.get('title') or 'Unknown'
             
             with download_lock:
                 active_downloads[download_id]["status"] = "completed"
                 active_downloads[download_id]["progress"] = 100
                 active_downloads[download_id]["title"] = title
             
-            # Determine the actual file path
             if downloaded_file_path:
                 file_ext = Path(downloaded_file_path).suffix
             else:
                 file_ext = f".{fmt}"
             file_name = f"{title}{file_ext}"
-            # Sanitize filename
             file_name = "".join(c for c in file_name if c.isalnum() or c in " ._-()").strip()
             full_path = str(output_path / file_name)
             
-            # Add to history
             add_to_history(title, "video", request.quality, fmt, fps=request.fps, path=full_path)
             
     except Exception as e:
@@ -393,8 +376,7 @@ def download_video(download_id, request, output_path):
                 active_downloads[download_id]["status"] = "error"
                 active_downloads[download_id]["error"] = str(e)
 
-def download_audio(download_id, request, output_path):
-    """Download audio"""
+def download_audio(download_id: str, request: DownloadRequest, output_path: Path):
     try:
         with download_lock:
             active_downloads[download_id]["status"] = "downloading"
@@ -431,7 +413,7 @@ def download_audio(download_id, request, output_path):
                                 active_downloads[download_id]["progress"] = progress
                                 active_downloads[download_id]["speed"] = speed
                                 active_downloads[download_id]["eta"] = eta
-                except:
+                except Exception:
                     pass
             elif d["status"] == "finished":
                 with download_lock:
@@ -456,21 +438,19 @@ def download_audio(download_id, request, output_path):
         
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(request.url, download=True)
-            title = info.get('title', 'Unknown')
+            title = info.get('title') or 'Unknown'
             
             with download_lock:
                 active_downloads[download_id]["status"] = "completed"
                 active_downloads[download_id]["progress"] = 100
                 active_downloads[download_id]["title"] = title
             
-            # Determine the actual file path
             if downloaded_file_path:
                 file_path = str(downloaded_file_path)
             else:
                 file_name = "".join(c for c in title if c.isalnum() or c in " ._-()").strip()
                 file_path = str(output_path / f"{file_name}.{audio_format}")
             
-            # Add to history
             add_to_history(title, "audio", audio_format, audio_format, bitrate=f"{bitrate} kbps", path=file_path)
             
     except Exception as e:
@@ -481,7 +461,6 @@ def download_audio(download_id, request, output_path):
 
 @app.get("/api/download/{download_id}/status")
 async def get_download_status(download_id: str):
-    """Get download status"""
     with download_lock:
         if download_id not in active_downloads:
             raise HTTPException(status_code=404, detail="Download not found")
@@ -489,23 +468,20 @@ async def get_download_status(download_id: str):
 
 @app.get("/api/downloads")
 async def get_active_downloads():
-    """Get all active downloads"""
     with download_lock:
         return JSONResponse(list(active_downloads.values()))
 
 @app.post("/api/history/delete")
-async def delete_history_item(data: dict):
-    """Delete a history item and its file"""
+async def delete_history_item(data: Dict[str, Any]):
     index = data.get("index")
     delete_file = data.get("delete_file", True)
     
     history = load_history()
-    if index is None or index < 0 or index >= len(history):
+    if index is None or not isinstance(index, int) or index < 0 or index >= len(history):
         raise HTTPException(status_code=404, detail="History item not found")
     
     item = history.pop(index)
     
-    # Delete the actual file if it exists
     if delete_file and item.get("path"):
         file_path = Path(item["path"])
         if file_path.exists():
@@ -522,13 +498,10 @@ async def delete_history_item(data: dict):
 
 @app.get("/api/download/{filename}/path")
 async def get_download_path(filename: str):
-    """Get full path of a downloaded file"""
-    # Search in downloads folder
     for file in DOWNLOADS_DIR.iterdir():
         if file.is_file() and file.name == filename:
             return JSONResponse({"path": str(file.absolute())})
     
-    # Also check in configured download folders from history
     history = load_history()
     for item in history:
         if item.get("path"):
@@ -540,9 +513,8 @@ async def get_download_path(filename: str):
 
 @app.get("/api/history/{index}/path")
 async def get_history_item_path(index: int):
-    """Get path of a history item by index"""
     history = load_history()
-    if index < 0 or index >= len(history):
+    if not history or index < 0 or index >= len(history):
         raise HTTPException(status_code=404, detail="History item not found")
     
     item = history[index]
@@ -553,8 +525,38 @@ async def get_history_item_path(index: int):
     
     raise HTTPException(status_code=404, detail="File path not found")
 
+# Catch-all route for SPA - MUST BE LAST
+@app.get("/{full_path:path}")
+async def catch_all(full_path: str):
+    """Catch all routes and serve index.html"""
+    # Skip API routes and static files
+    if full_path.startswith("api/") or full_path.startswith("static/"):
+        return JSONResponse({"error": "Not found"}, status_code=404)
+    
+    # Serve index.html for all other routes
+    index_file = BASE_DIR / "static" / "index.html"
+    if index_file.exists():
+        return FileResponse(index_file)
+    return JSONResponse({"error": "Not found"}, status_code=404)
+
 if __name__ == "__main__":
     import uvicorn
-    print("Starting YouTube Downloader Web App...")
-    print("Open your browser to: http://localhost:8000")
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    
+    port = int(os.environ.get("PORT", 8000))
+    host = "0.0.0.0"
+    
+    print("=" * 50)
+    print("YouTube Downloader Web App")
+    print("=" * 50)
+    print(f"Starting server on {host}:{port}")
+    print(f"Working directory: {BASE_DIR}")
+    print(f"Static files: {static_dir}")
+    print("=" * 50)
+    
+    try:
+        uvicorn.run(app, host=host, port=port, log_level="info")
+    except Exception as e:
+        print(f"ERROR: Failed to start server: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
