@@ -77,9 +77,19 @@ active_downloads: Dict[str, Dict[str, Any]] = {}
 download_lock = threading.Lock()
 
 # ===== CONFIG MANAGEMENT =====
+def get_default_download_folder() -> str:
+    """Get platform-specific default download folder"""
+    # On Render/Linux: use the app's downloads directory
+    # On Windows: use the user's Downloads folder
+    if os.name == 'nt':
+        user_downloads = os.path.join(os.environ.get('USERPROFILE', ''), 'Downloads')
+        if os.path.isdir(user_downloads):
+            return user_downloads
+    return str(DOWNLOADS_DIR)
+
 def load_config() -> Dict[str, Any]:
     default_config = {
-        "download_folder": str(DOWNLOADS_DIR),
+        "download_folder": get_default_download_folder(),
         "always_ask_location": False,
         "default_video_quality": "best",
         "default_video_format": "mp4",
@@ -189,21 +199,24 @@ async def clear_history():
 @app.post("/api/video-info")
 async def get_video_info(request: VideoInfoRequest):
     try:
+        # Try with minimal options first
         ydl_opts = {
             'quiet': True,
             'no_warnings': True,
             'extract_flat': False,
-            'ignoreerrors': True,
+            'ignoreerrors': False,
             'no_color': True,
             'socket_timeout': 30,
-            'retries': 3
+            'retries': 3,
+            'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'referer': 'https://www.youtube.com/',
         }
         
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(request.url, download=False, process=True)
             
             if not info:
-                raise HTTPException(status_code=400, detail="Could not extract video information")
+                raise HTTPException(status_code=400, detail="Could not extract video information. The video may not exist or is not available.")
             
             title = info.get('title') or 'Unknown'
             uploader = info.get('uploader') or 'Unknown'
@@ -241,12 +254,21 @@ async def get_video_info(request: VideoInfoRequest):
         error_msg = str(e)
         print(f"Video info error: {error_msg}")
         
-        if "RequestsResponseAdapter" in error_msg or "_http_error" in error_msg:
-            error_msg = "Network error. Please check your internet connection and try again."
+        # Provide user-friendly error messages
+        if "HTTP Error 429" in error_msg or "Too Many Requests" in error_msg:
+            error_msg = "Too many requests. Please wait a moment and try again."
+        elif "HTTP Error 403" in error_msg or "Forbidden" in error_msg:
+            error_msg = "Access denied. YouTube is blocking requests from this server. Please try again later."
+        elif "HTTP Error 404" in error_msg:
+            error_msg = "Video not found. Please check the URL and try again."
         elif "Private video" in error_msg:
             error_msg = "This video is private or unavailable."
         elif "not available" in error_msg.lower():
             error_msg = "Video not found or not available."
+        elif "Network" in error_msg or "Connection" in error_msg:
+            error_msg = "Network error. Please check your connection and try again."
+        else:
+            error_msg = f"Could not extract video information. {error_msg}"
         
         raise HTTPException(status_code=400, detail=error_msg)
 
@@ -348,7 +370,9 @@ def download_video(download_id: str, request: DownloadRequest, output_path: Path
             'merge_output_format': fmt,
             'progress_hooks': [progress_hook],
             'quiet': True,
-            'no_warnings': True
+            'no_warnings': True,
+            'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'referer': 'https://www.youtube.com/',
         }
         
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -433,7 +457,9 @@ def download_audio(download_id: str, request: DownloadRequest, output_path: Path
             'postprocessor_args': ['-codec:a', codec, '-b:a', f'{bitrate}k'],
             'progress_hooks': [progress_hook],
             'quiet': True,
-            'no_warnings': True
+            'no_warnings': True,
+            'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'referer': 'https://www.youtube.com/',
         }
         
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
