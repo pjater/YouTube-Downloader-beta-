@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube Downloader</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+                        <path d="M28.5 10.5C28.5 10.5 28 8.5 26.5 7.5C25 6.5 22.5 6.5 22.5 6.5H9.5C9.5 6.5 7 6.5 5.5 7.5C4 8.5 3.5 10.5 3.5 10.5V21.5C3.5 21.5 4 23.5 5.5 24.5C7 25.5 9.5 25.5 9.5 25.5H22.5C22.5 25.5 25 25.5 26.5 24.5C28 23.5 28.5 21.5 28.5 21.5V10.5Z" fill="#dc2626"/>
+                        <path d="M13 9.5L23 16L13 22.5V9.5Z" fill="white"/>
+                    </svg>
+                </div>
+            </div>
+
+            <nav class="sidebar-nav">
+                <button class="nav-item active" data-page="downloader">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="7 10 12 15 17 10"/>
+                        <line x1="12" y1="15" x2="12" y2="3"/>
+                    </svg>
+                    <span>Download</span>
+                </button>
+
+                <button class="nav-item" data-page="history">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"/>
+                        <polyline points="12 6 12 12 16 14"/>
+                    </svg>
+                    <span>History</span>
+                </button>
+
+                <button class="nav-item" data-page="settings">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="3"/>
+                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                    </svg>
+                    <span>Settings</span>
+                </button>
+
+                <button class="nav-item" data-page="about">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"/>
+                        <line x1="12" y1="16" x2="12" y2="12"/>
+                        <line x1="12" y1="8" x2="12.01" y2="8"/>
+                    </svg>
+                    <span>About</span>
+                </button>
+            </nav>
+
+            <div class="sidebar-footer">
+                <button class="theme-toggle" id="theme-toggle">
+                    <svg class="theme-icon-sun" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="5"/>
+                        <line x1="12" y1="1" x2="12" y2="3"/>
+                        <line x1="12" y1="21" x2="12" y2="23"/>
+                        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+                        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+                        <line x1="1" y1="12" x2="3" y2="12"/>
+                        <line x1="21" y1="12" x2="23" y2="12"/>
+                        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+                        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+                    </svg>
+                    <svg class="theme-icon-moon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none">
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+                    </svg>
+                    <span id="theme-label">Light Mode</span>
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Downloader Page -->
+            <div id="downloader-page" class="page active">
+                <div class="content-wrapper">
+                    <!-- Header -->
+                    <header class="page-header">
+                        <div class="header-text">
+                            <h1>YouTube Downloader</h1>
+                            <p>Download videos and audio in any format, fast, simple and unlimited.</p>
+                        </div>
+                    </header>
+
+                    <!-- URL Input Section -->
+                    <div class="card url-card">
+                        <label class="card-label">YOUTUBE URL</label>
+                        <div class="url-input-wrapper">
+                            <button class="paste-btn" id="paste-btn" title="Paste from clipboard">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="8" y="2" width="8" height="4" rx="1"/>
+                                    <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+                                    <polyline points="9 12 12 15 15 12"/>
+                                    <line x1="12" y1="9" x2="12" y2="15"/>
+                                </svg>
+                            </button>
+                            <input type="text" id="url-input" class="url-input" placeholder="https://www.youtube.com/watch?v=..." autocomplete="off">
+                            <button class="clear-btn" id="clear-url">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <line x1="18" y1="6" x2="6" y2="18"/>
+                                    <line x1="6" y1="6" x2="18" y2="18"/>
+                                </svg>
+                            </button>
+                            <button class="analyze-btn" id="analyze-btn">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+                                </svg>
+                                <span>Analyze</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Video Preview Card -->
+                    <div class="card preview-card" id="preview-card" style="display: none;">
+                        <div class="preview-content">
+                            <div class="thumbnail-wrapper">
+                                <img id="video-thumbnail" src="" alt="Video thumbnail">
+                                <div class="duration-badge" id="video-duration">3:24</div>
+                                <div class="play-overlay">
+                                    <svg width="48" height="48" viewBox="0 0 24 24" fill="white">
+                                        <path d="M8 5v14l11-7z"/>
+                                    </svg>
+                                </div>
+                            </div>
+                            <div class="video-info">
+                                <h3 class="video-title" id="video-title">Rick Astley - Never Gonna Give You Up</h3>
+                                <div class="video-meta">
+                                    <span class="meta-item">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                                            <circle cx="12" cy="7" r="4"/>
+                                        </svg>
+                                        <span id="video-uploader">Rick Astley</span>
+                                    </span>
+                                    <span class="meta-item">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                                            <circle cx="12" cy="12" r="3"/>
+                                        </svg>
+                                        <span id="video-views">1.4B views</span>
+                                    </span>
+                                    <span class="meta-item">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                                            <line x1="16" y1="2" x2="16" y2="6"/>
+                                            <line x1="8" y1="2" x2="8" y2="6"/>
+                                            <line x1="3" y1="10" x2="21" y2="10"/>
+                                        </svg>
+                                        <span id="video-date">Oct 24, 2009</span>
+                                    </span>
+                                    <span class="meta-item">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <circle cx="12" cy="12" r="10"/>
+                                            <polyline points="12 6 12 12 16 14"/>
+                                        </svg>
+                                        <span id="video-duration-meta">3:24</span>
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Download Type -->
+                    <div class="card type-card">
+                        <label class="card-label">DOWNLOAD TYPE</label>
+                        <div class="segmented-control">
+                            <button class="segment active" data-mode="video">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"/>
+                                    <line x1="7" y1="2" x2="7" y2="22"/>
+                                    <line x1="17" y1="2" x2="17" y2="22"/>
+                                    <line x1="2" y1="12" x2="22" y2="12"/>
+                                    <line x1="2" y1="7" x2="7" y2="7"/>
+                                    <line x1="2" y1="17" x2="7" y2="17"/>
+                                    <line x1="17" y1="17" x2="22" y2="17"/>
+                                    <line x1="17" y1="7" x2="22" y2="7"/>
+                                </svg>
+                                <span>Video</span>
+                            </button>
+                            <button class="segment" data-mode="audio">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M9 18V5l12-2v13"/>
+                                    <circle cx="6" cy="18" r="3"/>
+                                    <circle cx="18" cy="16" r="3"/>
+                                </svg>
+                                <span>Audio</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Format Options -->
+                    <div class="card options-card">
+                        <div class="options-grid">
+                            <div class="option-item" id="format-option">
+                                <label class="option-label">FORMAT</label>
+                                <div class="select-wrapper">
+                                    <svg class="select-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                                        <polyline points="14 2 14 8 20 8"/>
+                                    </svg>
+                                    <select id="video-format" class="option-select">
+                                        <option value="mp4">MP4</option>
+                                        <option value="webm">WebM</option>
+                                        <option value="mkv">MKV</option>
+                                        <option value="avi">AVI</option>
+                                        <option value="mov">MOV</option>
+                                        <option value="flv">FLV</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="option-item" id="resolution-option">
+                                <label class="option-label">RESOLUTION</label>
+                                <div class="select-wrapper">
+                                    <svg class="select-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+                                        <line x1="8" y1="21" x2="16" y2="21"/>
+                                        <line x1="12" y1="17" x2="12" y2="21"/>
+                                    </svg>
+                                    <select id="video-quality" class="option-select">
+                                        <option value="best">Best</option>
+                                        <option value="2160p">4K (2160p)</option>
+                                        <option value="1440p">2K (1440p)</option>
+                                        <option value="1080p">1080p (Full HD)</option>
+                                        <option value="720p">720p (HD)</option>
+                                        <option value="480p">480p</option>
+                                        <option value="360p">360p</option>
+                                        <option value="240p">240p</option>
+                                        <option value="144p">144p</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="option-item" id="codec-option">
+                                <label class="option-label">CODEC</label>
+                                <div class="select-wrapper">
+                                    <svg class="select-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <polyline points="16 18 22 12 16 6"/>
+                                        <polyline points="8 6 2 12 8 18"/>
+                                    </svg>
+                                    <select id="video-codec" class="option-select">
+                                        <option value="h264">H.264</option>
+                                        <option value="h265">H.265</option>
+                                        <option value="vp9">VP9</option>
+                                        <option value="av1">AV1</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="option-item" id="fps-option">
+                                <label class="option-label">FPS</label>
+                                <div class="select-wrapper">
+                                    <svg class="select-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <circle cx="12" cy="12" r="10"/>
+                                        <polyline points="12 6 12 12 16 14"/>
+                                    </svg>
+                                    <select id="fps-select" class="option-select">
+                                        <option value="30">30</option>
+                                        <option value="60">60</option>
+                                        <option value="24">24</option>
+                                        <option value="25">25</option>
+                                        <option value="50">50</option>
+                                        <option value="120">120</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="option-item audio-only" id="audio-format-option" style="display: none;">
+                                <label class="option-label">AUDIO FORMAT</label>
+                                <div class="select-wrapper">
+                                    <svg class="select-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M9 18V5l12-2v13"/>
+                                        <circle cx="6" cy="18" r="3"/>
+                                        <circle cx="18" cy="16" r="3"/>
+                                    </svg>
+                                    <select id="audio-format" class="option-select">
+                                        <option value="mp3">MP3</option>
+                                        <option value="m4a">M4A</option>
+                                        <option value="wav">WAV</option>
+                                        <option value="flac">FLAC</option>
+                                        <option value="ogg">OGG</option>
+                                        <option value="opus">OPUS</option>
+                                        <option value="aac">AAC</option>
+                                        <option value="wma">WMA</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="option-item audio-only" id="audio-bitrate-option" style="display: none;">
+                                <label class="option-label">AUDIO BITRATE</label>
+                                <div class="select-wrapper">
+                                    <svg class="select-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M12 2v20M2 12h20"/>
+                                    </svg>
+                                    <select id="audio-bitrate" class="option-select">
+                                        <option value="320">320 kbps</option>
+                                        <option value="256">256 kbps</option>
+                                        <option value="192">192 kbps</option>
+                                        <option value="160">160 kbps</option>
+                                        <option value="128">128 kbps</option>
+                                        <option value="96">96 kbps</option>
+                                        <option value="64">64 kbps</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Download Location -->
+                    <div class="card location-card">
+                        <label class="card-label">DOWNLOAD LOCATION</label>
+                        <div class="location-input-wrapper">
+                            <svg class="input-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                            </svg>
+                            <input type="text" id="download-path" class="location-input" readonly>
+                            <button class="browse-btn" id="browse-btn">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                                    <line x1="12" y1="11" x2="12" y2="17"/>
+                                    <line x1="9" y1="14" x2="15" y2="14"/>
+                                </svg>
+                                <span>Browse</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Download Button -->
+                    <button class="download-btn" id="download-btn">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="7 10 12 15 17 10"/>
+                            <line x1="12" y1="15" x2="12" y2="3"/>
+                        </svg>
+                        <span>Download</span>
+                    </button>
+
+                    <!-- Status Bar -->
+                    <div class="status-bar">
+                        <div class="status-text" id="status-text">READY TO DOWNLOAD</div>
+                        <div class="status-info" id="status-info">Estimated size: ~78.3 MB</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- History Page -->
+            <div id="history-page" class="page">
+                <div class="content-wrapper">
+                    <header class="page-header">
+                        <div class="header-text">
+                            <h1>Download History</h1>
+                            <p>View and manage your recent downloads</p>
+                        </div>
+                    </header>
+                    <div class="card history-card">
+                        <div id="history-list" class="history-list">
+                            <!-- History items will be inserted here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Settings Page -->
+            <div id="settings-page" class="page">
+                <div class="content-wrapper">
+                    <header class="page-header">
+                        <div class="header-text">
+                            <h1>Settings</h1>
+                            <p>Configure your download preferences</p>
+                        </div>
+                    </header>
+
+                    <div class="settings-grid">
+                        <!-- Download Settings -->
+                        <div class="card settings-card">
+                            <h3 class="settings-title">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                                </svg>
+                                Download Settings
+                            </h3>
+                            <div class="setting-item">
+                                <label class="setting-label">Default download folder</label>
+                                <div class="setting-input-group">
+                                    <input type="text" id="setting-folder" class="setting-input">
+                                    <button class="browse-btn-small" onclick="browseSettingsFolder()">Browse</button>
+                                </div>
+                            </div>
+                            <div class="setting-item">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="setting-always-ask">
+                                    <span class="checkbox-custom"></span>
+                                    <span>Always ask where to save</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Video Settings -->
+                        <div class="card settings-card">
+                            <h3 class="settings-title">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"/>
+                                    <line x1="7" y1="2" x2="7" y2="22"/>
+                                    <line x1="17" y1="2" x2="17" y2="22"/>
+                                </svg>
+                                Video
+                            </h3>
+                            <div class="setting-item">
+                                <label class="setting-label">Default quality</label>
+                                <select id="setting-vquality" class="setting-select">
+                                    <option value="best">Best</option>
+                                    <option value="last used">Last Used</option>
+                                    <option value="2160p">4K (2160p)</option>
+                                    <option value="1440p">2K (1440p)</option>
+                                    <option value="1080p">1080p (Full HD)</option>
+                                    <option value="720p">720p (HD)</option>
+                                    <option value="480p">480p</option>
+                                    <option value="360p">360p</option>
+                                </select>
+                            </div>
+                            <div class="setting-item">
+                                <label class="setting-label">Default format</label>
+                                <select id="setting-vformat" class="setting-select">
+                                    <option value="mp4">MP4</option>
+                                    <option value="last used">Last Used</option>
+                                    <option value="webm">WebM</option>
+                                    <option value="mkv">MKV</option>
+                                    <option value="avi">AVI</option>
+                                    <option value="mov">MOV</option>
+                                </select>
+                            </div>
+                            <div class="setting-item">
+                                <label class="setting-label">FPS preference</label>
+                                <select id="setting-fps" class="setting-select">
+                                    <option value="30">30</option>
+                                    <option value="last used">Last Used</option>
+                                    <option value="60">60</option>
+                                    <option value="24">24</option>
+                                    <option value="25">25</option>
+                                    <option value="50">50</option>
+                                    <option value="120">120</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Audio Settings -->
+                        <div class="card settings-card">
+                            <h3 class="settings-title">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M9 18V5l12-2v13"/>
+                                    <circle cx="6" cy="18" r="3"/>
+                                    <circle cx="18" cy="16" r="3"/>
+                                </svg>
+                                Audio
+                            </h3>
+                            <div class="setting-item">
+                                <label class="setting-label">Default bitrate</label>
+                                <select id="setting-abitrate" class="setting-select">
+                                    <option value="320">320 kbps</option>
+                                    <option value="last used">Last Used</option>
+                                    <option value="256">256 kbps</option>
+                                    <option value="192">192 kbps</option>
+                                    <option value="160">160 kbps</option>
+                                    <option value="128">128 kbps</option>
+                                    <option value="96">96 kbps</option>
+                                </select>
+                            </div>
+                            <div class="setting-item">
+                                <label class="setting-label">Default format</label>
+                                <select id="setting-aformat" class="setting-select">
+                                    <option value="mp3">MP3</option>
+                                    <option value="last used">Last Used</option>
+                                    <option value="m4a">M4A</option>
+                                    <option value="wav">WAV</option>
+                                    <option value="flac">FLAC</option>
+                                    <option value="ogg">OGG</option>
+                                    <option value="opus">OPUS</option>
+                                    <option value="aac">AAC</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Save Button -->
+                        <div class="save-section">
+                            <button class="save-btn" id="save-settings-btn">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                                    <polyline points="17 21 17 13 7 13 7 21"/>
+                                    <polyline points="7 3 7 8 15 8"/>
+                                </svg>
+                                <span>Save Settings</span>
+                            </button>
+                            <div class="save-confirmation" id="save-confirmation" style="display: none;">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="20 6 9 17 4 12"/>
+                                </svg>
+                                <span>Settings saved successfully!</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- About Page -->
+            <div id="about-page" class="page">
+                <div class="content-wrapper">
+                    <header class="page-header">
+                        <div class="header-text">
+                            <h1>About</h1>
+                            <p>Learn more about YouTube Downloader</p>
+                        </div>
+                    </header>
+
+                    <div class="about-content">
+                        <div class="card about-card">
+                            <div class="about-icon">
+                                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2">
+                                    <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                                    <path d="M2 17l10 5 10-5"/>
+                                    <path d="M2 12l10 5 10-5"/>
+                                </svg>
+                            </div>
+                            <h2 class="about-title">YouTube Downloader</h2>
+                            <p class="about-version">Version 2.0</p>
+                            <p class="about-description">A modern YouTube downloader with support for videos and audio in multiple formats. Fast, simple, and unlimited downloads.</p>
+                        </div>
+
+                        <div class="card about-card">
+                            <h3 class="about-section-title">✨ Features</h3>
+                            <ul class="about-list">
+                                <li>Download videos in multiple formats (MP4, WebM, MKV, AVI, MOV, FLV)</li>
+                                <li>Download audio in multiple formats (MP3, M4A, WAV, FLAC, OGG, OPUS, AAC, WMA)</li>
+                                <li>Select video quality from 144p to 4K</li>
+                                <li>Choose FPS (24, 25, 30, 50, 60, 120)</li>
+                                <li>Select audio bitrate (64-320 kbps)</li>
+                                <li>Persistent download history</li>
+                                <li>Customizable default settings</li>
+                                <li>Modern and intuitive interface</li>
+                                <li>Fast downloads with progress tracking</li>
+                            </ul>
+                        </div>
+
+                        <div class="card about-card">
+                            <h3 class="about-section-title">🔧 Technical Info</h3>
+                            <div class="tech-info">
+                                <p><strong>Built with:</strong></p>
+                                <ul class="about-list">
+                                    <li>Python 3</li>
+                                    <li>FastAPI (Backend)</li>
+                                    <li>yt-dlp (download engine)</li>
+                                    <li>FFmpeg (audio/video processing)</li>
+                                    <li>HTML/CSS/JavaScript (Frontend)</li>
+                                </ul>
+                                <p class="tech-platform">Platform: Windows</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Download Overlay -->
+        <div id="download-overlay" class="download-overlay" style="display: none;">
+            <div class="overlay-content">
+                <div class="overlay-spinner">
+                    <svg viewBox="0 0 24 24" width="80" height="80">
+                        <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="3" stroke-dasharray="31.4 31.4" stroke-linecap="round"/>
+                    </svg>
+                </div>
+                <h2 class="overlay-title" id="overlay-title">Downloading...</h2>
+                <p class="overlay-info" id="overlay-info">Preparing your download</p>
+                <div class="overlay-progress">
+                    <div class="overlay-progress-bar">
+                        <div class="overlay-progress-fill" id="overlay-progress-fill"></div>
+                    </div>
+                    <span class="overlay-progress-text" id="overlay-progress-text">0%</span>
+                </div>
+                <div class="overlay-details" id="overlay-details" style="display: none;">
+                    <p class="overlay-detail-item">
+                        <span class="detail-label">Speed:</span>
+                        <span class="detail-value" id="overlay-speed">-</span>
+                    </p>
+                    <p class="overlay-detail-item">
+                        <span class="detail-label">ETA:</span>
+                        <span class="detail-value" id="overlay-eta">-</span>
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Sidebar - Recent Downloads -->
+        <aside class="right-sidebar">
+            <div class="right-sidebar-header">
+                <h3>Recent Downloads</h3>
+                <button class="refresh-btn" id="refresh-history">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="23 4 23 10 17 10"/>
+                        <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="recent-downloads" id="recent-downloads">
+                <!-- Recent downloads will be inserted here -->
+            </div>
+            <button class="view-all-btn" id="view-all-history">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <polyline points="12 6 12 12 16 14"/>
+                </svg>
+                <span>View All History</span>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="5" y1="12" x2="19" y2="12"/>
+                    <polyline points="12 5 19 12 12 19"/>
+                </svg>
+            </button>
+        </aside>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
