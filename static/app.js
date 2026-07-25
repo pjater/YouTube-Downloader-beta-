@@ -1,843 +1,823 @@
-// ===== GLOBAL STATE =====
-let currentMode = 'video';
-let currentPage = 'downloader';
-let config = {};
-let history = [];
-let currentDownloadId = null;
-let pollingInterval = null;
-let isDarkMode = true;
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube Downloader</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+                        <path d="M28.5 10.5C28.5 10.5 28 8.5 26.5 7.5C25 6.5 22.5 6.5 22.5 6.5H9.5C9.5 6.5 7 6.5 5.5 7.5C4 8.5 3.5 10.5 3.5 10.5V21.5C3.5 21.5 4 23.5 5.5 24.5C7 25.5 9.5 25.5 9.5 25.5H22.5C22.5 25.5 25 25.5 26.5 24.5C28 23.5 28.5 21.5 28.5 21.5V10.5Z" fill="#dc2626"/>
+                        <path d="M13 9.5L23 16L13 22.5V9.5Z" fill="white"/>
+                    </svg>
+                </div>
+            </div>
 
-// ===== THEME MANAGEMENT =====
-function initTheme() {
-    const saved = localStorage.getItem('yt-dl-theme');
-    isDarkMode = saved !== null ? saved === 'dark' : true;
-    applyTheme();
-}
+            <nav class="sidebar-nav">
+                <button class="nav-item active" data-page="downloader">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="7 10 12 15 17 10"/>
+                        <line x1="12" y1="15" x2="12" y2="3"/>
+                    </svg>
+                    <span>Download</span>
+                </button>
 
-function applyTheme() {
-    const root = document.documentElement;
-    if (isDarkMode) {
-        root.style.setProperty('--bg-primary', '#0a0a0f');
-        root.style.setProperty('--bg-secondary', '#111118');
-        root.style.setProperty('--bg-card', '#16161d');
-        root.style.setProperty('--bg-card-hover', '#1c1c25');
-        root.style.setProperty('--bg-input', '#0d0d12');
-        root.style.setProperty('--border-color', '#2a2a35');
-        root.style.setProperty('--border-subtle', '#1f1f28');
-        root.style.setProperty('--text-primary', '#ffffff');
-        root.style.setProperty('--text-secondary', '#8b8b99');
-        root.style.setProperty('--text-tertiary', '#6b6b78');
-        document.querySelector('.theme-icon-sun').style.display = 'none';
-        document.querySelector('.theme-icon-moon').style.display = '';
-        document.getElementById('theme-label').textContent = 'Dark Mode';
-    } else {
-        root.style.setProperty('--bg-primary', '#f5f5f7');
-        root.style.setProperty('--bg-secondary', '#ffffff');
-        root.style.setProperty('--bg-card', '#ffffff');
-        root.style.setProperty('--bg-card-hover', '#f0f0f2');
-        root.style.setProperty('--bg-input', '#f5f5f7');
-        root.style.setProperty('--border-color', '#d1d1d6');
-        root.style.setProperty('--border-subtle', '#e5e5ea');
-        root.style.setProperty('--text-primary', '#1c1c1e');
-        root.style.setProperty('--text-secondary', '#636366');
-        root.style.setProperty('--text-tertiary', '#aeaeb2');
-        document.querySelector('.theme-icon-sun').style.display = '';
-        document.querySelector('.theme-icon-moon').style.display = 'none';
-        document.getElementById('theme-label').textContent = 'Light Mode';
-    }
-    localStorage.setItem('yt-dl-theme', isDarkMode ? 'dark' : 'light');
-}
+                <button class="nav-item" data-page="history">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"/>
+                        <polyline points="12 6 12 12 16 14"/>
+                    </svg>
+                    <span>History</span>
+                </button>
 
-function toggleTheme() {
-    isDarkMode = !isDarkMode;
-    applyTheme();
-}
+                <button class="nav-item" data-page="settings">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="3"/>
+                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                    </svg>
+                    <span>Settings</span>
+                </button>
 
-// ===== INITIALIZATION =====
-document.addEventListener('DOMContentLoaded', async () => {
-    initTheme();
-    await loadConfig();
-    await loadHistory();
-    updateUIFromConfig();
-    renderRecentDownloads();
-    
-    // Setup event listeners
-    setupEventListeners();
-});
+                <button class="nav-item" data-page="about">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"/>
+                        <line x1="12" y1="16" x2="12" y2="12"/>
+                        <line x1="12" y1="8" x2="12.01" y2="8"/>
+                    </svg>
+                    <span>About</span>
+                </button>
+            </nav>
 
-function setupEventListeners() {
-    // Theme toggle
-    document.getElementById('theme-toggle').addEventListener('click', toggleTheme);
-    
-    // Navigation
-    document.querySelectorAll('.nav-item').forEach(item => {
-        item.addEventListener('click', () => {
-            const page = item.dataset.page;
-            showPage(page);
-        });
-    });
-    
-    // URL input
-    const urlInput = document.getElementById('url-input');
-    const clearBtn = document.getElementById('clear-url');
-    const analyzeBtn = document.getElementById('analyze-btn');
-    const pasteBtn = document.getElementById('paste-btn');
-    
-    pasteBtn.addEventListener('click', async () => {
-        try {
-            const text = await navigator.clipboard.readText();
-            urlInput.value = text;
-            urlInput.focus();
-        } catch {
-            alert('Could not access clipboard. Please paste manually (Ctrl+V).');
-        }
-    });
-    
-    clearBtn.addEventListener('click', () => {
-        urlInput.value = '';
-        urlInput.focus();
-        document.getElementById('preview-card').style.display = 'none';
-    });
-    
-    analyzeBtn.addEventListener('click', fetchVideoInfo);
-    
-    urlInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-            fetchVideoInfo();
-        }
-    });
-    
-    // Mode tabs
-    document.querySelectorAll('.segment').forEach(segment => {
-        segment.addEventListener('click', () => {
-            const mode = segment.dataset.mode;
-            setMode(mode);
-        });
-    });
-    
-    // Download button
-    document.getElementById('download-btn').addEventListener('click', startDownload);
-    
-    // View all history
-    document.getElementById('view-all-history').addEventListener('click', () => {
-        showPage('history');
-    });
-    
-    // Refresh history
-    document.getElementById('refresh-history').addEventListener('click', async () => {
-        await loadHistory();
-        renderRecentDownloads();
-    });
-    
-    // Save settings
-    document.getElementById('save-settings-btn').addEventListener('click', saveSettings);
-}
+            <div class="sidebar-footer">
+                <button class="theme-toggle" id="theme-toggle">
+                    <svg class="theme-icon-sun" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="5"/>
+                        <line x1="12" y1="1" x2="12" y2="3"/>
+                        <line x1="12" y1="21" x2="12" y2="23"/>
+                        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+                        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+                        <line x1="1" y1="12" x2="3" y2="12"/>
+                        <line x1="21" y1="12" x2="23" y2="12"/>
+                        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+                        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+                    </svg>
+                    <svg class="theme-icon-moon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none">
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+                    </svg>
+                    <span id="theme-label">Light Mode</span>
+                </button>
+            </div>
+        </aside>
 
-// ===== API CALLS =====
-async function apiCall(endpoint, method = 'GET', data = null) {
-    try {
-        const options = {
-            method,
-            headers: {
-                'Content-Type': 'application/json',
-            }
-        };
-        
-        if (data) {
-            options.body = JSON.stringify(data);
-        }
-        
-        const response = await fetch(endpoint, options);
-        
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.detail || 'API error');
-        }
-        
-        return await response.json();
-    } catch (error) {
-        console.error('API call failed:', error);
-        throw error;
-    }
-}
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Downloader Page -->
+            <div id="downloader-page" class="page active">
+                <div class="content-wrapper">
+                    <!-- Header -->
+                    <header class="page-header">
+                        <div class="header-text">
+                            <h1>YouTube Downloader</h1>
+                            <p>Download videos and audio in any format, fast, simple and unlimited.</p>
+                        </div>
+                    </header>
 
-// ===== CONFIG MANAGEMENT =====
-async function loadConfig() {
-    try {
-        config = await apiCall('/api/config');
-    } catch (error) {
-        console.error('Failed to load config:', error);
-        config = getDefaultConfig();
-    }
-}
+                    <!-- URL Input Section -->
+                    <div class="card url-card">
+                        <label class="card-label">YOUTUBE URL</label>
+                        <div class="url-input-wrapper">
+                            <button class="paste-btn" id="paste-btn" title="Paste from clipboard">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="8" y="2" width="8" height="4" rx="1"/>
+                                    <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+                                    <polyline points="9 12 12 15 15 12"/>
+                                    <line x1="12" y1="9" x2="12" y2="15"/>
+                                </svg>
+                            </button>
+                            <input type="text" id="url-input" class="url-input" placeholder="https://www.youtube.com/watch?v=..." autocomplete="off">
+                            <button class="clear-btn" id="clear-url">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <line x1="18" y1="6" x2="6" y2="18"/>
+                                    <line x1="6" y1="6" x2="18" y2="18"/>
+                                </svg>
+                            </button>
+                            <button class="analyze-btn" id="analyze-btn">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+                                </svg>
+                                <span>Analyze</span>
+                            </button>
+                        </div>
+                    </div>
 
-function getDefaultConfig() {
-    return {
-        default_video_quality: 'best',
-        default_video_format: 'mp4',
-        default_fps: '30',
-        default_audio_bitrate: '192',
-        default_audio_format: 'mp3',
-        last_used: {
-            video_quality: '1080p',
-            video_format: 'mp4',
-            fps: '60',
-            audio_bitrate: '192',
-            audio_format: 'mp3'
-        }
-    };
-}
+                    <!-- Video Preview Card -->
+                    <div class="card preview-card" id="preview-card" style="display: none;">
+                        <div class="preview-content">
+                            <div class="thumbnail-wrapper">
+                                <img id="video-thumbnail" src="" alt="Video thumbnail">
+                                <div class="duration-badge" id="video-duration">3:24</div>
+                                <div class="play-overlay">
+                                    <svg width="48" height="48" viewBox="0 0 24 24" fill="white">
+                                        <path d="M8 5v14l11-7z"/>
+                                    </svg>
+                                </div>
+                            </div>
+                            <div class="video-info">
+                                <h3 class="video-title" id="video-title">Rick Astley - Never Gonna Give You Up</h3>
+                                <div class="video-meta">
+                                    <span class="meta-item">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                                            <circle cx="12" cy="7" r="4"/>
+                                        </svg>
+                                        <span id="video-uploader">Rick Astley</span>
+                                    </span>
+                                    <span class="meta-item">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                                            <circle cx="12" cy="12" r="3"/>
+                                        </svg>
+                                        <span id="video-views">1.4B views</span>
+                                    </span>
+                                    <span class="meta-item">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                                            <line x1="16" y1="2" x2="16" y2="6"/>
+                                            <line x1="8" y1="2" x2="8" y2="6"/>
+                                            <line x1="3" y1="10" x2="21" y2="10"/>
+                                        </svg>
+                                        <span id="video-date">Oct 24, 2009</span>
+                                    </span>
+                                    <span class="meta-item">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <circle cx="12" cy="12" r="10"/>
+                                            <polyline points="12 6 12 12 16 14"/>
+                                        </svg>
+                                        <span id="video-duration-meta">3:24</span>
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
 
-function updateUIFromConfig() {
-    // Settings page
-    document.getElementById('setting-vquality').value = config.default_video_quality || 'best';
-    document.getElementById('setting-vformat').value = config.default_video_format || 'mp4';
-    document.getElementById('setting-fps').value = config.default_fps || '30';
-    document.getElementById('setting-abitrate').value = config.default_audio_bitrate || '192';
-    document.getElementById('setting-aformat').value = config.default_audio_format || 'mp3';
-    
-    // Downloader page - apply last used or defaults
-    const lastUsed = config.last_used || {};
-    document.getElementById('video-quality').value = lastUsed.video_quality || config.default_video_quality || 'best';
-    document.getElementById('video-format').value = lastUsed.video_format || config.default_video_format || 'mp4';
-    document.getElementById('fps-select').value = lastUsed.fps || config.default_fps || '30';
-    document.getElementById('audio-bitrate').value = lastUsed.audio_bitrate || config.default_audio_bitrate || '192';
-    document.getElementById('audio-format').value = lastUsed.audio_format || config.default_audio_format || 'mp3';
-}
+                    <!-- Download Type -->
+                    <div class="card type-card">
+                        <label class="card-label">DOWNLOAD TYPE</label>
+                        <div class="segmented-control">
+                            <button class="segment active" data-mode="video">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"/>
+                                    <line x1="7" y1="2" x2="7" y2="22"/>
+                                    <line x1="17" y1="2" x2="17" y2="22"/>
+                                    <line x1="2" y1="12" x2="22" y2="12"/>
+                                    <line x1="2" y1="7" x2="7" y2="7"/>
+                                    <line x1="2" y1="17" x2="7" y2="17"/>
+                                    <line x1="17" y1="17" x2="22" y2="17"/>
+                                    <line x1="17" y1="7" x2="22" y2="7"/>
+                                </svg>
+                                <span>Video</span>
+                            </button>
+                            <button class="segment" data-mode="audio">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M9 18V5l12-2v13"/>
+                                    <circle cx="6" cy="18" r="3"/>
+                                    <circle cx="18" cy="16" r="3"/>
+                                </svg>
+                                <span>Audio</span>
+                            </button>
+                        </div>
+                    </div>
 
-async function saveSettings() {
-    try {
-        const settings = {
-            default_video_quality: document.getElementById('setting-vquality').value,
-            default_video_format: document.getElementById('setting-vformat').value,
-            default_fps: document.getElementById('setting-fps').value,
-            default_audio_bitrate: document.getElementById('setting-abitrate').value,
-            default_audio_format: document.getElementById('setting-aformat').value
-        };
-        
-        await apiCall('/api/config', 'POST', settings);
-        
-        // Update local config
-        config = { ...config, ...settings };
-        
-        // Show confirmation
-        const saveBtn = document.getElementById('save-settings-btn');
-        const confirmation = document.getElementById('save-confirmation');
-        
-        saveBtn.style.display = 'none';
-        confirmation.style.display = 'flex';
-        
-        setTimeout(() => {
-            saveBtn.style.display = 'flex';
-            confirmation.style.display = 'none';
-        }, 2000);
-        
-    } catch (error) {
-        alert('Failed to save settings: ' + error.message);
-    }
-}
+                    <!-- Format Options -->
+                    <div class="card options-card">
+                        <div class="options-grid">
+                            <div class="option-item" id="format-option">
+                                <label class="option-label">FORMAT</label>
+                                <div class="select-wrapper">
+                                    <svg class="select-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                                        <polyline points="14 2 14 8 20 8"/>
+                                    </svg>
+                                    <select id="video-format" class="option-select">
+                                        <option value="mp4">MP4</option>
+                                        <option value="webm">WebM</option>
+                                        <option value="mkv">MKV</option>
+                                        <option value="avi">AVI</option>
+                                        <option value="mov">MOV</option>
+                                        <option value="flv">FLV</option>
+                                    </select>
+                                </div>
+                            </div>
 
-// ===== HISTORY MANAGEMENT =====
-async function loadHistory() {
-    try {
-        history = await apiCall('/api/history');
-    } catch (error) {
-        console.error('Failed to load history:', error);
-        history = [];
-    }
-}
+                            <div class="option-item" id="resolution-option">
+                                <label class="option-label">RESOLUTION</label>
+                                <div class="select-wrapper">
+                                    <svg class="select-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+                                        <line x1="8" y1="21" x2="16" y2="21"/>
+                                        <line x1="12" y1="17" x2="12" y2="21"/>
+                                    </svg>
+                                    <select id="video-quality" class="option-select">
+                                        <option value="best">Best</option>
+                                        <option value="2160p">4K (2160p)</option>
+                                        <option value="1440p">2K (1440p)</option>
+                                        <option value="1080p">1080p (Full HD)</option>
+                                        <option value="720p">720p (HD)</option>
+                                        <option value="480p">480p</option>
+                                        <option value="360p">360p</option>
+                                        <option value="240p">240p</option>
+                                        <option value="144p">144p</option>
+                                    </select>
+                                </div>
+                            </div>
 
-async function deleteHistoryItem(index) {
-    if (!confirm('Are you sure you want to delete this download from history?')) {
-        return;
-    }
-    
-    try {
-        const result = await apiCall('/api/history/delete', 'POST', { index });
-        await loadHistory();
-        renderRecentDownloads();
-        if (currentPage === 'history') {
-            renderHistoryPage();
-        }
-    } catch (error) {
-        console.error('Delete error:', error);
-        alert('Failed to delete: ' + error.message);
-    }
-}
+                            <div class="option-item" id="codec-option">
+                                <label class="option-label">CODEC</label>
+                                <div class="select-wrapper">
+                                    <svg class="select-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <polyline points="16 18 22 12 16 6"/>
+                                        <polyline points="8 6 2 12 8 18"/>
+                                    </svg>
+                                    <select id="video-codec" class="option-select">
+                                        <option value="h264">H.264</option>
+                                        <option value="h265">H.265</option>
+                                        <option value="vp9">VP9</option>
+                                        <option value="av1">AV1</option>
+                                    </select>
+                                </div>
+                            </div>
 
-function renderRecentDownloads() {
-    const container = document.getElementById('recent-downloads');
-    
-    if (!history || history.length === 0) {
-        container.innerHTML = `
-            <div class="history-empty">
-                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <div class="option-item" id="fps-option">
+                                <label class="option-label">FPS</label>
+                                <div class="select-wrapper">
+                                    <svg class="select-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <circle cx="12" cy="12" r="10"/>
+                                        <polyline points="12 6 12 12 16 14"/>
+                                    </svg>
+                                    <select id="fps-select" class="option-select">
+                                        <option value="30">30</option>
+                                        <option value="60">60</option>
+                                        <option value="24">24</option>
+                                        <option value="25">25</option>
+                                        <option value="50">50</option>
+                                        <option value="120">120</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="option-item audio-only" id="audio-format-option" style="display: none;">
+                                <label class="option-label">AUDIO FORMAT</label>
+                                <div class="select-wrapper">
+                                    <svg class="select-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M9 18V5l12-2v13"/>
+                                        <circle cx="6" cy="18" r="3"/>
+                                        <circle cx="18" cy="16" r="3"/>
+                                    </svg>
+                                    <select id="audio-format" class="option-select">
+                                        <option value="mp3">MP3</option>
+                                        <option value="m4a">M4A</option>
+                                        <option value="wav">WAV</option>
+                                        <option value="flac">FLAC</option>
+                                        <option value="ogg">OGG</option>
+                                        <option value="opus">OPUS</option>
+                                        <option value="aac">AAC</option>
+                                        <option value="wma">WMA</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="option-item audio-only" id="audio-bitrate-option" style="display: none;">
+                                <label class="option-label">AUDIO BITRATE</label>
+                                <div class="select-wrapper">
+                                    <svg class="select-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M12 2v20M2 12h20"/>
+                                    </svg>
+                                    <select id="audio-bitrate" class="option-select">
+                                        <option value="320">320 kbps</option>
+                                        <option value="256">256 kbps</option>
+                                        <option value="192">192 kbps</option>
+                                        <option value="160">160 kbps</option>
+                                        <option value="128">128 kbps</option>
+                                        <option value="96">96 kbps</option>
+                                        <option value="64">64 kbps</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Download to Browser Info -->
+                    <div class="card info-card">
+                        <div class="info-row">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                <polyline points="7 10 12 15 17 10"/>
+                                <line x1="12" y1="15" x2="12" y2="3"/>
+                            </svg>
+                            <span>File will be downloaded directly to your browser</span>
+                        </div>
+                    </div>
+
+                    <!-- Download Button -->
+                    <button class="download-btn" id="download-btn">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="7 10 12 15 17 10"/>
+                            <line x1="12" y1="15" x2="12" y2="3"/>
+                        </svg>
+                        <span>Download to Browser</span>
+                    </button>
+
+                    <!-- Status Bar -->
+                    <div class="status-bar">
+                        <div class="status-text" id="status-text">READY TO DOWNLOAD</div>
+                        <div class="status-info" id="status-info">Estimated size: ~78.3 MB</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- History Page -->
+            <div id="history-page" class="page">
+                <div class="content-wrapper">
+                    <header class="page-header">
+                        <div class="header-text">
+                            <h1>Download History</h1>
+                            <p>View and manage your recent downloads</p>
+                        </div>
+                    </header>
+                    <div class="card history-card">
+                        <div id="history-list" class="history-list">
+                            <!-- History items will be inserted here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Settings Page -->
+            <div id="settings-page" class="page">
+                <div class="content-wrapper">
+                    <header class="page-header">
+                        <div class="header-text">
+                            <h1>Settings</h1>
+                            <p>Configure your download preferences</p>
+                        </div>
+                    </header>
+
+                    <div class="settings-grid">
+                        <!-- Video Settings -->
+                        <div class="card settings-card">
+                            <h3 class="settings-title">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"/>
+                                    <line x1="7" y1="2" x2="7" y2="22"/>
+                                    <line x1="17" y1="2" x2="17" y2="22"/>
+                                </svg>
+                                Video
+                            </h3>
+                            <div class="setting-item">
+                                <label class="setting-label">Default quality</label>
+                                <select id="setting-vquality" class="setting-select">
+                                    <option value="best">Best</option>
+                                    <option value="last used">Last Used</option>
+                                    <option value="2160p">4K (2160p)</option>
+                                    <option value="1440p">2K (1440p)</option>
+                                    <option value="1080p">1080p (Full HD)</option>
+                                    <option value="720p">720p (HD)</option>
+                                    <option value="480p">480p</option>
+                                    <option value="360p">360p</option>
+                                </select>
+                            </div>
+                            <div class="setting-item">
+                                <label class="setting-label">Default format</label>
+                                <select id="setting-vformat" class="setting-select">
+                                    <option value="mp4">MP4</option>
+                                    <option value="last used">Last Used</option>
+                                    <option value="webm">WebM</option>
+                                    <option value="mkv">MKV</option>
+                                    <option value="avi">AVI</option>
+                                    <option value="mov">MOV</option>
+                                </select>
+                            </div>
+                            <div class="setting-item">
+                                <label class="setting-label">FPS preference</label>
+                                <select id="setting-fps" class="setting-select">
+                                    <option value="30">30</option>
+                                    <option value="last used">Last Used</option>
+                                    <option value="60">60</option>
+                                    <option value="24">24</option>
+                                    <option value="25">25</option>
+                                    <option value="50">50</option>
+                                    <option value="120">120</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Audio Settings -->
+                        <div class="card settings-card">
+                            <h3 class="settings-title">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M9 18V5l12-2v13"/>
+                                    <circle cx="6" cy="18" r="3"/>
+                                    <circle cx="18" cy="16" r="3"/>
+                                </svg>
+                                Audio
+                            </h3>
+                            <div class="setting-item">
+                                <label class="setting-label">Default bitrate</label>
+                                <select id="setting-abitrate" class="setting-select">
+                                    <option value="320">320 kbps</option>
+                                    <option value="last used">Last Used</option>
+                                    <option value="256">256 kbps</option>
+                                    <option value="192">192 kbps</option>
+                                    <option value="160">160 kbps</option>
+                                    <option value="128">128 kbps</option>
+                                    <option value="96">96 kbps</option>
+                                </select>
+                            </div>
+                            <div class="setting-item">
+                                <label class="setting-label">Default format</label>
+                                <select id="setting-aformat" class="setting-select">
+                                    <option value="mp3">MP3</option>
+                                    <option value="last used">Last Used</option>
+                                    <option value="m4a">M4A</option>
+                                    <option value="wav">WAV</option>
+                                    <option value="flac">FLAC</option>
+                                    <option value="ogg">OGG</option>
+                                    <option value="opus">OPUS</option>
+                                    <option value="aac">AAC</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- YouTube Cookies Section -->
+                        <div class="card settings-card">
+                            <h3 class="settings-title">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                                    <path d="M2 17l10 5 10-5"/>
+                                    <path d="M2 12l10 5 10-5"/>
+                                </svg>
+                                YouTube Authentication (Cookies)
+                            </h3>
+                            <div class="setting-item">
+                                <label class="setting-label">Why do I need this?</label>
+                                <p class="setting-help-text">YouTube now requires authentication to download videos. Export your YouTube cookies from your browser and upload them here.</p>
+                            </div>
+                            <div class="setting-item">
+                                <button class="cookie-btn cookie-wizard-btn" onclick="openCookieWizard()">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <circle cx="12" cy="12" r="10"/>
+                                        <line x1="12" y1="16" x2="12" y2="12"/>
+                                        <line x1="12" y1="8" x2="12.01" y2="8"/>
+                                    </svg>
+                                    <span>Setup Wizard</span>
+                                </button>
+                            </div>
+                            <div class="setting-item">
+                                <label class="setting-label">Cookie status</label>
+                                <div id="cookie-status" class="cookie-status not-uploaded">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <circle cx="12" cy="12" r="10"/>
+                                        <line x1="15" y1="9" x2="9" y2="15"/>
+                                        <line x1="9" y1="9" x2="15" y2="15"/>
+                                    </svg>
+                                    <span id="cookie-status-text">Checking...</span>
+                                </div>
+                            </div>
+                            <div class="setting-item">
+                                <label class="setting-label">Upload cookies.txt</label>
+                                <div class="cookie-upload-group">
+                                    <input type="file" id="cookie-file-input" accept=".txt" style="display: none;">
+                                    <button class="browse-btn-small" id="cookie-upload-btn" onclick="document.getElementById('cookie-file-input').click()">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                            <polyline points="17 8 12 3 7 8"/>
+                                            <line x1="12" y1="3" x2="12" y2="15"/>
+                                        </svg>
+                                        <span>Choose File</span>
+                                    </button>
+                                    <span id="cookie-file-name" class="cookie-file-name">No file selected</span>
+                                </div>
+                            </div>
+                            <div class="setting-item cookie-actions" id="cookie-actions" style="display: none;">
+                                <button class="cookie-btn cookie-upload-btn" id="cookie-submit-btn" onclick="uploadCookies()">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                        <polyline points="17 8 12 3 7 8"/>
+                                        <line x1="12" y1="3" x2="12" y2="15"/>
+                                    </svg>
+                                    <span>Upload Cookies</span>
+                                </button>
+                                <button class="cookie-btn cookie-delete-btn" id="cookie-delete-btn" onclick="deleteCookies()">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <polyline points="3 6 5 6 21 6"/>
+                                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                                    </svg>
+                                    <span>Delete Cookies</span>
+                                </button>
+                            </div>
+                            <div class="setting-item">
+                                <details class="cookie-help">
+                                    <summary>How to export cookies from your browser</summary>
+                                    <div class="cookie-help-steps">
+                                        <p><strong>Option 1: Using a browser extension (Recommended)</strong></p>
+                                        <ol>
+                                            <li>Install the "Get cookies.txt LOCALLY" extension for <a href="https://chrome.google.com/webstore/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc" target="_blank">Chrome</a> or <a href="https://addons.mozilla.org/en-US/firefox/addon/cookies-txt/" target="_blank">Firefox</a></li>
+                                            <li>Go to YouTube and make sure you're logged in</li>
+                                            <li>Click the extension icon and export cookies as "cookies.txt"</li>
+                                            <li>Upload the file here</li>
+                                        </ol>
+                                        <p><strong>Option 2: Using a bookmarklet</strong></p>
+                                        <ol>
+                                            <li>Go to <a href="https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies" target="_blank">this guide</a></li>
+                                            <li>Follow the instructions to export cookies</li>
+                                            <li>Upload the cookies.txt file here</li>
+                                        </ol>
+                                    </div>
+                                </details>
+                            </div>
+                        </div>
+
+                        <!-- Save Button -->
+                        <div class="save-section">
+                            <button class="save-btn" id="save-settings-btn">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                                    <polyline points="17 21 17 13 7 13 7 21"/>
+                                    <polyline points="7 3 7 8 15 8"/>
+                                </svg>
+                                <span>Save Settings</span>
+                            </button>
+                            <div class="save-confirmation" id="save-confirmation" style="display: none;">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="20 6 9 17 4 12"/>
+                                </svg>
+                                <span>Settings saved successfully!</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- About Page -->
+            <div id="about-page" class="page">
+                <div class="content-wrapper">
+                    <header class="page-header">
+                        <div class="header-text">
+                            <h1>About</h1>
+                            <p>Learn more about YouTube Downloader</p>
+                        </div>
+                    </header>
+
+                    <div class="about-content">
+                        <div class="card about-card">
+                            <div class="about-icon">
+                                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2">
+                                    <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                                    <path d="M2 17l10 5 10-5"/>
+                                    <path d="M2 12l10 5 10-5"/>
+                                </svg>
+                            </div>
+                            <h2 class="about-title">YouTube Downloader</h2>
+                            <p class="about-version">Version 2.0</p>
+                            <p class="about-description">A modern YouTube downloader with support for videos and audio in multiple formats. Fast, simple, and unlimited downloads.</p>
+                        </div>
+
+                        <div class="card about-card">
+                            <h3 class="about-section-title">✨ Features</h3>
+                            <ul class="about-list">
+                                <li>Download videos in multiple formats (MP4, WebM, MKV, AVI, MOV, FLV)</li>
+                                <li>Download audio in multiple formats (MP3, M4A, WAV, FLAC, OGG, OPUS, AAC, WMA)</li>
+                                <li>Select video quality from 144p to 4K</li>
+                                <li>Choose FPS (24, 25, 30, 50, 60, 120)</li>
+                                <li>Select audio bitrate (64-320 kbps)</li>
+                                <li>Persistent download history</li>
+                                <li>Customizable default settings</li>
+                                <li>Modern and intuitive interface</li>
+                                <li>Fast downloads with progress tracking</li>
+                            </ul>
+                        </div>
+
+                        <div class="card about-card">
+                            <h3 class="about-section-title">🔧 Technical Info</h3>
+                            <div class="tech-info">
+                                <p><strong>Built with:</strong></p>
+                                <ul class="about-list">
+                                    <li>Python 3</li>
+                                    <li>FastAPI (Backend)</li>
+                                    <li>yt-dlp (download engine)</li>
+                                    <li>FFmpeg (audio/video processing)</li>
+                                    <li>HTML/CSS/JavaScript (Frontend)</li>
+                                </ul>
+                                <p class="tech-platform">Platform: Windows</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Download Overlay -->
+        <div id="download-overlay" class="download-overlay" style="display: none;">
+            <div class="overlay-content">
+                <div class="overlay-spinner">
+                    <svg viewBox="0 0 24 24" width="80" height="80">
+                        <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="3" stroke-dasharray="31.4 31.4" stroke-linecap="round"/>
+                    </svg>
+                </div>
+                <h2 class="overlay-title" id="overlay-title">Downloading...</h2>
+                <p class="overlay-info" id="overlay-info">Preparing your download</p>
+                <div class="overlay-progress">
+                    <div class="overlay-progress-bar">
+                        <div class="overlay-progress-fill" id="overlay-progress-fill"></div>
+                    </div>
+                    <span class="overlay-progress-text" id="overlay-progress-text">0%</span>
+                </div>
+                <div class="overlay-details" id="overlay-details" style="display: none;">
+                    <p class="overlay-detail-item">
+                        <span class="detail-label">Speed:</span>
+                        <span class="detail-value" id="overlay-speed">-</span>
+                    </p>
+                    <p class="overlay-detail-item">
+                        <span class="detail-label">ETA:</span>
+                        <span class="detail-value" id="overlay-eta">-</span>
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Sidebar - Recent Downloads -->
+        <aside class="right-sidebar">
+            <div class="right-sidebar-header">
+                <h3>Recent Downloads</h3>
+                <button class="refresh-btn" id="refresh-history">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="23 4 23 10 17 10"/>
+                        <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="recent-downloads" id="recent-downloads">
+                <!-- Recent downloads will be inserted here -->
+            </div>
+            <button class="view-all-btn" id="view-all-history">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <circle cx="12" cy="12" r="10"/>
                     <polyline points="12 6 12 12 16 14"/>
                 </svg>
-                <p>No downloads yet</p>
-            </div>
-        `;
-        return;
-    }
-    
-    container.innerHTML = history.slice(0, 10).map((item, index) => {
-        const title = item.title.length > 30 ? item.title.substring(0, 30) + '...' : item.title;
-        const mode = item.mode === 'video' ? 'Video' : 'Audio';
-        let details = `${mode} • ${item.format}`;
-        if (item.fps && item.mode === 'video') {
-            details += ` • ${item.fps} FPS`;
-        }
-        if (item.bitrate && item.mode === 'audio') {
-            details += ` • ${item.bitrate}`;
-        }
-        
-        const thumbnail = `https://img.youtube.com/vi/${extractVideoIdFromTitle(item.title)}/hqdefault.jpg`;
-        
-        return `
-            <div class="download-item">
-                <div class="download-thumbnail">
-                    <img src="${thumbnail}" alt="thumbnail" onerror="this.style.display='none'">
-                </div>
-                <div class="download-info">
-                    <div class="download-title">${escapeHtml(title)}</div>
-                    <div class="download-meta">${details}</div>
-                    <div class="download-status">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="20 6 9 17 4 12"/>
-                        </svg>
-                        <span>Completed</span>
+                <span>View All History</span>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="5" y1="12" x2="19" y2="12"/>
+                    <polyline points="12 5 19 12 12 19"/>
+                </svg>
+            </button>
+        </aside>
+    </div>
+
+    <!-- Cookie Setup Wizard Modal -->
+    <div id="cookie-wizard" class="wizard-overlay" style="display: none;">
+        <div class="wizard-modal">
+            <div class="wizard-header">
+                <div class="wizard-progress">
+                    <div class="wizard-step-indicator" id="wizard-step-indicator">
+                        <div class="wizard-step-dot active" data-step="1">1</div>
+                        <div class="wizard-step-line"></div>
+                        <div class="wizard-step-dot" data-step="2">2</div>
+                        <div class="wizard-step-line"></div>
+                        <div class="wizard-step-dot" data-step="3">3</div>
+                        <div class="wizard-step-line"></div>
+                        <div class="wizard-step-dot" data-step="4">4</div>
                     </div>
+                    <div class="wizard-step-text" id="wizard-step-text">Step <span id="wizard-current-step">1</span> of 4</div>
                 </div>
-                <div class="download-actions">
-                    <button class="action-btn delete-btn" onclick="deleteHistoryItem(${index})" title="Delete">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="3 6 5 6 21 6"/>
-                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                <button class="wizard-close" onclick="closeCookieWizard()">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"/>
+                        <line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="wizard-content" id="wizard-content">
+                <!-- Step 1: Log in to YouTube -->
+                <div class="wizard-step" data-step="1">
+                    <div class="wizard-step-icon">
+                        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M14.5 2C11.7 2 9.5 4.2 9.5 7v7.5c0 2.8 2.2 5 5 5s5-2.2 5-5V7c0-2.8-2.2-5-5-5z"/>
+                            <path d="M12 15a3 3 0 110-6 3 3 0 010 6z"/>
                         </svg>
+                    </div>
+                    <h2 class="wizard-step-title">Log in to YouTube</h2>
+                    <p class="wizard-step-desc">You need to be logged into YouTube so we can export your session cookies.</p>
+                    <button class="wizard-btn wizard-btn-primary" onclick="window.open('https://www.youtube.com', '_blank')">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                            <polyline points="15 17 20 12 15 7"/>
+                        </svg>
+                        <span>Open YouTube</span>
                     </button>
                 </div>
-            </div>
-        `;
-    }).join('');
-}
 
-function renderHistoryPage() {
-    const container = document.getElementById('history-list');
-    
-    if (!history || history.length === 0) {
-        container.innerHTML = `
-            <div class="history-empty">
-                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <circle cx="12" cy="12" r="10"/>
-                    <polyline points="12 6 12 12 16 14"/>
-                </svg>
-                <p>No downloads yet</p>
-            </div>
-        `;
-        return;
-    }
-    
-    container.innerHTML = history.map((item, index) => {
-        const title = item.title.length > 50 ? item.title.substring(0, 50) + '...' : item.title;
-        const mode = item.mode === 'video' ? 'Video' : 'Audio';
-        let details = `${mode} • ${item.format}`;
-        if (item.fps && item.mode === 'video') {
-            details += ` • ${item.fps} FPS`;
-        }
-        if (item.bitrate && item.mode === 'audio') {
-            details += ` • ${item.bitrate}`;
-        }
-        
-        return `
-            <div class="history-item">
-                <div class="download-info">
-                    <div class="download-title">${escapeHtml(title)}</div>
-                    <div class="download-meta">${details}</div>
-                    <div class="download-status">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="20 6 9 17 4 12"/>
+                <!-- Step 2: Install extension -->
+                <div class="wizard-step" data-step="2">
+                    <div class="wizard-step-icon">
+                        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.7-3.7a1 1 0 0 0 0-1.4l-1.6-1.6a1 1 0 0 0-1.4 0z"/>
+                            <path d="M14 16.5l-8 3.5a1 1 0 0 1-1.4-1V6a1 1 0 0 1 1-1h4a1 1 0 0 1 .8.4l3.5 5a1 1 0 0 1 0 1.2l-3.5 4.5a1 1 0 0 1-1.2.4z"/>
                         </svg>
-                        <span>Completed • ${item.timestamp}</span>
+                    </div>
+                    <h2 class="wizard-step-title">Install Extension</h2>
+                    <p class="wizard-step-desc">Install the "Get cookies.txt LOCALLY" extension for your browser:</p>
+                    <div class="wizard-btn-group">
+                        <button class="wizard-btn wizard-btn-outline" onclick="window.open('https://chrome.google.com/webstore/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc', '_blank')">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                            </svg>
+                            <span>Chrome Web Store</span>
+                        </button>
+                        <button class="wizard-btn wizard-btn-outline" onclick="window.open('https://microsoftedge.microsoft.com/addons/microsoft-edge/extensions/webstore/googlechromelatest/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc', '_blank')">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"/>
+                                <path d="M12 2v20M2 12h20"/>
+                            </svg>
+                            <span>Microsoft Edge Add-ons</span>
+                        </button>
+                        <button class="wizard-btn wizard-btn-outline" onclick="window.open('https://addons.mozilla.org/en-US/firefox/addon/cookies-txt/', '_blank')">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                            </svg>
+                            <span>Firefox Add-ons</span>
+                        </button>
                     </div>
                 </div>
-                <div class="download-actions">
-                    <button class="action-btn delete-btn" onclick="deleteHistoryItem(${index})" title="Delete">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="3 6 5 6 21 6"/>
-                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+
+                <!-- Step 3: Export cookies -->
+                <div class="wizard-step" data-step="3">
+                    <div class="wizard-step-icon">
+                        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                            <polyline points="14 2 14 8 20 8"/>
+                            <polyline points="12 17 15 14 18 17"/>
+                            <line x1="15" y1="14" x2="15" y2="20"/>
                         </svg>
-                    </button>
+                    </div>
+                    <h2 class="wizard-step-title">Export Your Cookies</h2>
+                    <p class="wizard-step-desc">Follow these steps to export your YouTube cookies:</p>
+                    <ol class="wizard-steps-list">
+                        <li>Keep YouTube open in your browser.</li>
+                        <li>Click the Extensions (🧩) icon in your browser toolbar.</li>
+                        <li>Open <strong>Get cookies.txt LOCALLY</strong>.</li>
+                        <li>Click the <strong>Export</strong> button.</li>
+                        <li>Wait for <strong>cookies.txt</strong> to download.</li>
+                    </ol>
+                </div>
+
+                <!-- Step 4: Upload cookies -->
+                <div class="wizard-step" data-step="4">
+                    <div class="wizard-step-icon">
+                        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="17 8 12 3 7 8"/>
+                            <line x1="12" y1="3" x2="12" y2="15"/>
+                        </svg>
+                    </div>
+                    <h2 class="wizard-step-title">Upload Your Cookies</h2>
+                    <p class="wizard-step-desc">Now upload the cookies file to this website:</p>
+                    <ol class="wizard-steps-list">
+                        <li>Return to this website.</li>
+                        <li>Open <strong>Settings → YouTube Authentication</strong>.</li>
+                        <li>Click <strong>Upload cookies.txt</strong>.</li>
+                        <li>Select the downloaded <strong>cookies.txt</strong> file.</li>
+                        <li>Wait for the <strong>success message</strong>.</li>
+                    </ol>
                 </div>
             </div>
-        `;
-    }).join('');
-}
+            <div class="wizard-footer">
+                <button class="wizard-btn wizard-btn-outline" id="wizard-back-btn" onclick="wizardPrevStep()">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="19" y1="12" x2="5" y2="12"/>
+                        <polyline points="9 19 5 12 9 5"/>
+                    </svg>
+                    <span>Back</span>
+                </button>
+                <button class="wizard-btn wizard-btn-primary" id="wizard-next-btn" onclick="wizardNextStep()">
+                    <span>Next</span>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="5" y1="12" x2="19" y2="12"/>
+                        <polyline points="13 19 19 12 13 5"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </div>
 
-// Helper to extract video ID from history (best effort)
-function extractVideoIdFromTitle(title) {
-    // We don't store video IDs, so use a generic approach
-    return '';
-}
-
-// ===== NAVIGATION =====
-function showPage(page) {
-    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-    
-    const pageEl = document.getElementById(`${page}-page`);
-    if (pageEl) {
-        pageEl.classList.add('active');
-    }
-    
-    document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
-    document.querySelector(`[data-page="${page}"]`)?.classList.add('active');
-    
-    currentPage = page;
-    
-    if (page === 'history') {
-        loadHistory().then(() => {
-            renderHistoryPage();
-        });
-    }
-    
-    if (page === 'downloader') {
-        loadHistory().then(() => {
-            renderRecentDownloads();
-        });
-    }
-}
-
-// ===== MODE SWITCHING =====
-function setMode(mode) {
-    currentMode = mode;
-    
-    const videoTab = document.querySelector('[data-mode="video"]');
-    const audioTab = document.querySelector('[data-mode="audio"]');
-    
-    const videoOptions = document.querySelectorAll('#format-option, #resolution-option, #codec-option, #fps-option');
-    const audioOptions = document.querySelectorAll('.audio-only');
-    
-    if (mode === 'video') {
-        videoTab.classList.add('active');
-        audioTab.classList.remove('active');
-        
-        videoOptions.forEach(opt => opt.style.display = 'flex');
-        audioOptions.forEach(opt => opt.style.display = 'none');
-    } else {
-        audioTab.classList.add('active');
-        videoTab.classList.remove('active');
-        
-        videoOptions.forEach(opt => opt.style.display = 'none');
-        audioOptions.forEach(opt => opt.style.display = 'flex');
-    }
-}
-
-// ===== VIDEO INFO =====
-async function fetchVideoInfo() {
-    const url = document.getElementById('url-input').value.trim();
-    const previewCard = document.getElementById('preview-card');
-    
-    if (!url) {
-        alert('Please enter a YouTube URL first.');
-        return;
-    }
-    
-    const analyzeBtn = document.getElementById('analyze-btn');
-    analyzeBtn.disabled = true;
-    analyzeBtn.innerHTML = '<span>Analyzing...</span>';
-    
-    try {
-        const info = await apiCall('/api/video-info', 'POST', { url });
-        
-        const thumbnail = info.thumbnail || `https://img.youtube.com/vi/${extractVideoId(url)}/hqdefault.jpg`;
-        document.getElementById('video-thumbnail').src = thumbnail;
-        document.getElementById('video-title').textContent = info.title;
-        document.getElementById('video-uploader').textContent = info.uploader;
-        document.getElementById('video-views').textContent = formatViews(info.view_count);
-        document.getElementById('video-duration').textContent = info.duration;
-        document.getElementById('video-duration-meta').textContent = info.duration;
-        
-        const date = new Date();
-        document.getElementById('video-date').textContent = date.toLocaleDateString('en-US', { 
-            year: 'numeric', 
-            month: 'short', 
-            day: 'numeric' 
-        });
-        
-        previewCard.style.display = 'block';
-        
-        document.getElementById('status-text').textContent = 'VIDEO ANALYZED';
-        document.getElementById('status-info').textContent = `Best quality: ${info.best_quality}`;
-        
-    } catch (error) {
-        alert('Failed to fetch video info: ' + error.message);
-    } finally {
-        analyzeBtn.disabled = false;
-        analyzeBtn.innerHTML = `
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
-            </svg>
-            <span>Analyze</span>
-        `;
-    }
-}
-
-function extractVideoId(url) {
-    const patterns = [
-        /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/,
-        /youtube\.com\/watch\?.*v=([^&\n?#]+)/
-    ];
-    for (const pattern of patterns) {
-        const match = url.match(pattern);
-        if (match) return match[1];
-    }
-    return '';
-}
-
-function formatViews(views) {
-    if (!views) return '0 views';
-    if (views >= 1000000000) {
-        return (views / 1000000000).toFixed(1) + 'B views';
-    } else if (views >= 1000000) {
-        return (views / 1000000).toFixed(1) + 'M views';
-    } else if (views >= 1000) {
-        return (views / 1000).toFixed(1) + 'K views';
-    }
-    return views + ' views';
-}
-
-// ===== DOWNLOAD MANAGEMENT =====
-async function startDownload() {
-    const url = document.getElementById('url-input').value.trim();
-    
-    if (!url) {
-        alert('Please enter a YouTube URL first.');
-        return;
-    }
-    
-    // Show overlay
-    const overlay = document.getElementById('download-overlay');
-    overlay.style.display = 'flex';
-    overlay.classList.add('active');
-    
-    // Reset overlay state
-    document.getElementById('overlay-title').textContent = 'Downloading...';
-    document.getElementById('overlay-info').textContent = 'Preparing your download on the server';
-    document.getElementById('overlay-progress-fill').style.width = '0%';
-    document.getElementById('overlay-progress-text').textContent = '0%';
-    document.getElementById('overlay-details').style.display = 'none';
-    overlay.classList.remove('success');
-    
-    try {
-        const request = {
-            url: url,
-            mode: currentMode,
-            quality: document.getElementById('video-quality').value,
-            format: document.getElementById('video-format').value,
-            fps: document.getElementById('fps-select').value,
-            audio_format: document.getElementById('audio-format').value,
-            audio_bitrate: document.getElementById('audio-bitrate').value,
-        };
-        
-        const response = await apiCall('/api/download', 'POST', request);
-        currentDownloadId = response.download_id;
-        
-        // Start polling for status
-        startStatusPolling();
-        
-    } catch (error) {
-        alert('Failed to start download: ' + error.message);
-        hideOverlay();
-    }
-}
-
-function startStatusPolling() {
-    if (pollingInterval) {
-        clearInterval(pollingInterval);
-    }
-    
-    pollingInterval = setInterval(async () => {
-        if (!currentDownloadId) {
-            clearInterval(pollingInterval);
-            return;
-        }
-        
-        try {
-            const status = await apiCall(`/api/download/${currentDownloadId}/status`);
-            updateOverlayProgress(status);
-            
-            if (status.status === 'completed' || status.status === 'error') {
-                clearInterval(pollingInterval);
-                
-                if (status.status === 'completed') {
-                    // Trigger browser download!
-                    if (status.download_url) {
-                        triggerBrowserDownload(status.download_url, status.filename);
-                    }
-                    
-                    showSuccessState();
-                    
-                    await loadHistory();
-                    renderRecentDownloads();
-                    
-                    setTimeout(() => {
-                        hideOverlay();
-                    }, 2000);
-                }
-                
-                if (status.status === 'error') {
-                    alert('Download failed: ' + status.error);
-                    hideOverlay();
-                }
-            }
-        } catch (error) {
-            console.error('Failed to get download status:', error);
-        }
-    }, 500);
-}
-
-function triggerBrowserDownload(downloadUrl, filename) {
-    // Create a temporary link element and click it to trigger browser download
-    const link = document.createElement('a');
-    link.href = downloadUrl;
-    link.download = filename || 'download';
-    link.style.display = 'none';
-    document.body.appendChild(link);
-    link.click();
-    
-    // Clean up
-    setTimeout(() => {
-        document.body.removeChild(link);
-    }, 1000);
-}
-
-function updateOverlayProgress(status) {
-    const overlay = document.getElementById('download-overlay');
-    const title = document.getElementById('overlay-title');
-    const info = document.getElementById('overlay-info');
-    const progressFill = document.getElementById('overlay-progress-fill');
-    const progressText = document.getElementById('overlay-progress-text');
-    const details = document.getElementById('overlay-details');
-    const speedEl = document.getElementById('overlay-speed');
-    const etaEl = document.getElementById('overlay-eta');
-    
-    if (status.status === 'preparing') {
-        title.textContent = 'Downloading...';
-        info.textContent = 'Preparing your download on the server';
-        progressFill.style.width = '0%';
-        progressText.textContent = '0%';
-        details.style.display = 'none';
-    } else if (status.status === 'downloading') {
-        const progress = status.progress || 0;
-        const speed = status.speed ? `${(status.speed / 1024 / 1024).toFixed(1)} MB/s` : '?';
-        const eta = status.eta ? `${status.eta}s` : '?';
-        
-        title.textContent = 'Downloading to server...';
-        info.textContent = 'Downloading from YouTube to server';
-        progressFill.style.width = `${progress}%`;
-        progressText.textContent = `${progress}%`;
-        details.style.display = 'flex';
-        speedEl.textContent = speed;
-        etaEl.textContent = eta;
-    } else if (status.status === 'converting') {
-        title.textContent = 'Processing...';
-        info.textContent = 'Converting your file on server';
-        progressFill.style.width = '95%';
-        progressText.textContent = '95%';
-        details.style.display = 'flex';
-        speedEl.textContent = '-';
-        etaEl.textContent = '-';
-    }
-}
-
-function showSuccessState() {
-    const overlay = document.getElementById('download-overlay');
-    const title = document.getElementById('overlay-title');
-    const info = document.getElementById('overlay-info');
-    const progressFill = document.getElementById('overlay-progress-fill');
-    const progressText = document.getElementById('overlay-progress-text');
-    
-    overlay.classList.add('success');
-    title.textContent = 'Download Complete!';
-    info.textContent = 'Your file is being downloaded to your browser';
-    progressFill.style.width = '100%';
-    progressText.textContent = '100%';
-}
-
-function hideOverlay() {
-    const overlay = document.getElementById('download-overlay');
-    overlay.classList.remove('active');
-    setTimeout(() => {
-        overlay.style.display = 'none';
-    }, 300);
-}
-
-// ===== UTILITY FUNCTIONS =====
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
-
-// ===== COOKIE MANAGEMENT =====
-async function checkCookieStatus() {
-    try {
-        const status = await apiCall('/api/cookies/status');
-        updateCookieUI(status.available);
-        return status.available;
-    } catch (error) {
-        console.error('Failed to check cookie status:', error);
-        const statusEl = document.getElementById('cookie-status');
-        if (statusEl) {
-            statusEl.className = 'cookie-status error';
-            statusEl.innerHTML = `
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <circle cx="12" cy="12" r="10"/>
-                    <line x1="15" y1="9" x2="9" y2="15"/>
-                    <line x1="9" y1="9" x2="15" y2="15"/>
-                </svg>
-                <span>Could not check status</span>
-            `;
-        }
-        return false;
-    }
-}
-
-function updateCookieUI(available) {
-    const statusEl = document.getElementById('cookie-status');
-    const actionsEl = document.getElementById('cookie-actions');
-    
-    if (!statusEl) return;
-    
-    if (available) {
-        statusEl.className = 'cookie-status uploaded';
-        statusEl.innerHTML = `
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polyline points="20 6 9 17 4 12"/>
-            </svg>
-            <span>Cookies are active ✓ YouTube authentication is working</span>
-        `;
-        if (actionsEl) actionsEl.style.display = 'flex';
-        const submitBtn = document.getElementById('cookie-submit-btn');
-        const deleteBtn = document.getElementById('cookie-delete-btn');
-        if (submitBtn) submitBtn.style.display = 'none';
-        if (deleteBtn) deleteBtn.style.display = 'flex';
-    } else {
-        statusEl.className = 'cookie-status not-uploaded';
-        statusEl.innerHTML = `
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="12" cy="12" r="10"/>
-                <line x1="15" y1="9" x2="9" y2="15"/>
-                <line x1="9" y1="9" x2="15" y2="15"/>
-            </svg>
-            <span>No cookies uploaded - YouTube may block downloads</span>
-        `;
-        if (actionsEl) actionsEl.style.display = 'flex';
-        const submitBtn = document.getElementById('cookie-submit-btn');
-        const deleteBtn = document.getElementById('cookie-delete-btn');
-        if (submitBtn) submitBtn.style.display = 'flex';
-        if (deleteBtn) deleteBtn.style.display = 'none';
-    }
-}
-
-// Setup cookie file input listener
-document.addEventListener('DOMContentLoaded', () => {
-    setTimeout(() => {
-        const fileInput = document.getElementById('cookie-file-input');
-        if (fileInput) {
-            fileInput.addEventListener('change', function() {
-                const fileNameEl = document.getElementById('cookie-file-name');
-                const actionsEl = document.getElementById('cookie-actions');
-                if (this.files && this.files.length > 0) {
-                    fileNameEl.textContent = this.files[0].name;
-                    if (actionsEl) actionsEl.style.display = 'flex';
-                    const submitBtn = document.getElementById('cookie-submit-btn');
-                    const deleteBtn = document.getElementById('cookie-delete-btn');
-                    if (submitBtn) submitBtn.style.display = 'flex';
-                    if (deleteBtn) deleteBtn.style.display = 'none';
-                } else {
-                    fileNameEl.textContent = 'No file selected';
-                }
-            });
-        }
-        
-        checkCookieStatus();
-    }, 100);
-});
-
-async function uploadCookies() {
-    const fileInput = document.getElementById('cookie-file-input');
-    const submitBtn = document.getElementById('cookie-submit-btn');
-    
-    if (!fileInput.files || fileInput.files.length === 0) {
-        alert('Please select a cookies.txt file first.');
-        return;
-    }
-    
-    const file = fileInput.files[0];
-    
-    if (!file.name.endsWith('.txt')) {
-        alert('Please select a .txt file (Netscape format cookies file).');
-        return;
-    }
-    
-    submitBtn.disabled = true;
-    submitBtn.innerHTML = '<span>Uploading...</span>';
-    
-    try {
-        const formData = new FormData();
-        formData.append('file', file);
-        
-        const response = await fetch('/api/cookies/upload', {
-            method: 'POST',
-            body: formData
-        });
-        
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.detail || 'Upload failed');
-        }
-        
-        updateCookieUI(true);
-        
-        fileInput.value = '';
-        document.getElementById('cookie-file-name').textContent = 'No file selected';
-        
-        alert('Cookies uploaded successfully! YouTube authentication is now active.');
-        
-    } catch (error) {
-        alert('Failed to upload cookies: ' + error.message);
-    } finally {
-        submitBtn.disabled = false;
-        submitBtn.innerHTML = `
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                <polyline points="17 8 12 3 7 8"/>
-                <line x1="12" y1="3" x2="12" y2="15"/>
-            </svg>
-            <span>Upload Cookies</span>
-        `;
-    }
-}
-
-async function deleteCookies() {
-    if (!confirm('Are you sure you want to delete the uploaded cookies?')) {
-        return;
-    }
-    
-    try {
-        await apiCall('/api/cookies/delete', 'POST');
-        updateCookieUI(false);
-        alert('Cookies deleted successfully.');
-    } catch (error) {
-        alert('Failed to delete cookies: ' + error.message);
-    }
-}
-
-// ===== PERIODIC REFRESH =====
-setInterval(async () => {
-    if (currentPage === 'downloader') {
-        await loadHistory();
-        renderRecentDownloads();
-    }
-}, 30000);
+    <script src="/static/app.js"></script>
+</body>
+</html>
+>>>>>>>
