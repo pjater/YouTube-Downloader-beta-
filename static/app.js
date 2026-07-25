@@ -61,17 +61,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     updateUIFromConfig();
     renderRecentDownloads();
     
-    // Set default download path
-    const defaultPath = config.download_folder || getDefaultDownloadPath();
-    document.getElementById('download-path').value = defaultPath;
-    
     // Setup event listeners
     setupEventListeners();
 });
-
-function getDefaultDownloadPath() {
-    return 'C:\\Users\\' + (window.require?.('os').userInfo().username || 'User') + '\\Downloads\\YouTube';
-}
 
 function setupEventListeners() {
     // Theme toggle
@@ -125,9 +117,6 @@ function setupEventListeners() {
     
     // Download button
     document.getElementById('download-btn').addEventListener('click', startDownload);
-    
-    // Browse button
-    document.getElementById('browse-btn').addEventListener('click', browseFolder);
     
     // View all history
     document.getElementById('view-all-history').addEventListener('click', () => {
@@ -184,8 +173,6 @@ async function loadConfig() {
 
 function getDefaultConfig() {
     return {
-        download_folder: '',
-        always_ask_location: false,
         default_video_quality: 'best',
         default_video_format: 'mp4',
         default_fps: '30',
@@ -203,8 +190,6 @@ function getDefaultConfig() {
 
 function updateUIFromConfig() {
     // Settings page
-    document.getElementById('setting-folder').value = config.download_folder || '';
-    document.getElementById('setting-always-ask').checked = config.always_ask_location;
     document.getElementById('setting-vquality').value = config.default_video_quality || 'best';
     document.getElementById('setting-vformat').value = config.default_video_format || 'mp4';
     document.getElementById('setting-fps').value = config.default_fps || '30';
@@ -223,8 +208,6 @@ function updateUIFromConfig() {
 async function saveSettings() {
     try {
         const settings = {
-            download_folder: document.getElementById('setting-folder').value,
-            always_ask_location: document.getElementById('setting-always-ask').checked,
             default_video_quality: document.getElementById('setting-vquality').value,
             default_video_format: document.getElementById('setting-vformat').value,
             default_fps: document.getElementById('setting-fps').value,
@@ -264,14 +247,13 @@ async function loadHistory() {
     }
 }
 
-async function deleteHistoryItem(index, deleteFile = true) {
-    if (!confirm('Are you sure you want to delete this download? This will also delete the file from your computer.')) {
+async function deleteHistoryItem(index) {
+    if (!confirm('Are you sure you want to delete this download from history?')) {
         return;
     }
     
     try {
-        const result = await apiCall('/api/history/delete', 'POST', { index, delete_file: deleteFile });
-        console.log('Delete result:', result);
+        const result = await apiCall('/api/history/delete', 'POST', { index });
         await loadHistory();
         renderRecentDownloads();
         if (currentPage === 'history') {
@@ -280,34 +262,6 @@ async function deleteHistoryItem(index, deleteFile = true) {
     } catch (error) {
         console.error('Delete error:', error);
         alert('Failed to delete: ' + error.message);
-    }
-}
-
-async function openFileLocation(path) {
-    if (!path) {
-        alert('No file path available for this download.');
-        return;
-    }
-    
-    try {
-        // Try to get the actual path from the backend
-        const response = await fetch(`/api/history/${path}/path`);
-        if (response.ok) {
-            const data = await response.json();
-            if (data.path) {
-                window.open('file:///' + data.path.replace(/\\/g, '/'));
-                return;
-            }
-        }
-    } catch (error) {
-        console.error('Failed to get file path:', error);
-    }
-    
-    // Fallback: try to open the path directly
-    try {
-        window.open('file:///' + path.replace(/\\/g, '/'));
-    } catch (error) {
-        alert('Could not open file location. The file may have been moved or deleted.');
     }
 }
 
@@ -338,13 +292,12 @@ function renderRecentDownloads() {
             details += ` • ${item.bitrate}`;
         }
         
-        // Use real thumbnail if available, otherwise placeholder
-        const thumbnail = item.thumbnail || `https://via.placeholder.com/80x45/16161d/8b8b99?text=▶`;
+        const thumbnail = `https://img.youtube.com/vi/${extractVideoIdFromTitle(item.title)}/hqdefault.jpg`;
         
         return `
             <div class="download-item">
                 <div class="download-thumbnail">
-                    <img src="${thumbnail}" alt="thumbnail">
+                    <img src="${thumbnail}" alt="thumbnail" onerror="this.style.display='none'">
                 </div>
                 <div class="download-info">
                     <div class="download-title">${escapeHtml(title)}</div>
@@ -357,11 +310,6 @@ function renderRecentDownloads() {
                     </div>
                 </div>
                 <div class="download-actions">
-                    <button class="action-btn" onclick="openFileLocation('${escapeHtml(item.path || '')}')" title="Open file location">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-                        </svg>
-                    </button>
                     <button class="action-btn delete-btn" onclick="deleteHistoryItem(${index})" title="Delete">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <polyline points="3 6 5 6 21 6"/>
@@ -401,14 +349,8 @@ function renderHistoryPage() {
             details += ` • ${item.bitrate}`;
         }
         
-        // Use real thumbnail if available, otherwise placeholder
-        const thumbnail = item.thumbnail || `https://via.placeholder.com/80x45/16161d/8b8b99?text=▶`;
-        
         return `
             <div class="history-item">
-                <div class="download-thumbnail">
-                    <img src="${thumbnail}" alt="thumbnail">
-                </div>
                 <div class="download-info">
                     <div class="download-title">${escapeHtml(title)}</div>
                     <div class="download-meta">${details}</div>
@@ -420,12 +362,7 @@ function renderHistoryPage() {
                     </div>
                 </div>
                 <div class="download-actions">
-                    <button class="action-btn" onclick="openFileLocation('${escapeHtml(item.path || '')}')" title="Open file location">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-                        </svg>
-                    </button>
-                    <button class="action-btn delete-btn" onclick="deleteHistoryItem(${index})" title="Delete download and file">
+                    <button class="action-btn delete-btn" onclick="deleteHistoryItem(${index})" title="Delete">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <polyline points="3 6 5 6 21 6"/>
                             <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
@@ -437,31 +374,32 @@ function renderHistoryPage() {
     }).join('');
 }
 
+// Helper to extract video ID from history (best effort)
+function extractVideoIdFromTitle(title) {
+    // We don't store video IDs, so use a generic approach
+    return '';
+}
+
 // ===== NAVIGATION =====
 function showPage(page) {
-    // Hide all pages
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
     
-    // Show selected page
     const pageEl = document.getElementById(`${page}-page`);
     if (pageEl) {
         pageEl.classList.add('active');
     }
     
-    // Update sidebar nav
     document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
     document.querySelector(`[data-page="${page}"]`)?.classList.add('active');
     
     currentPage = page;
     
-    // Refresh history when showing history page
     if (page === 'history') {
         loadHistory().then(() => {
             renderHistoryPage();
         });
     }
     
-    // Refresh recent downloads when showing downloader page
     if (page === 'downloader') {
         loadHistory().then(() => {
             renderRecentDownloads();
@@ -511,7 +449,6 @@ async function fetchVideoInfo() {
     try {
         const info = await apiCall('/api/video-info', 'POST', { url });
         
-        // Update preview card with thumbnail - use YouTube's own thumbnail
         const thumbnail = info.thumbnail || `https://img.youtube.com/vi/${extractVideoId(url)}/hqdefault.jpg`;
         document.getElementById('video-thumbnail').src = thumbnail;
         document.getElementById('video-title').textContent = info.title;
@@ -520,7 +457,6 @@ async function fetchVideoInfo() {
         document.getElementById('video-duration').textContent = info.duration;
         document.getElementById('video-duration-meta').textContent = info.duration;
         
-        // Format date (if available)
         const date = new Date();
         document.getElementById('video-date').textContent = date.toLocaleDateString('en-US', { 
             year: 'numeric', 
@@ -530,7 +466,6 @@ async function fetchVideoInfo() {
         
         previewCard.style.display = 'block';
         
-        // Update status
         document.getElementById('status-text').textContent = 'VIDEO ANALYZED';
         document.getElementById('status-info').textContent = `Best quality: ${info.best_quality}`;
         
@@ -587,7 +522,7 @@ async function startDownload() {
     
     // Reset overlay state
     document.getElementById('overlay-title').textContent = 'Downloading...';
-    document.getElementById('overlay-info').textContent = 'Preparing your download';
+    document.getElementById('overlay-info').textContent = 'Preparing your download on the server';
     document.getElementById('overlay-progress-fill').style.width = '0%';
     document.getElementById('overlay-progress-text').textContent = '0%';
     document.getElementById('overlay-details').style.display = 'none';
@@ -602,7 +537,6 @@ async function startDownload() {
             fps: document.getElementById('fps-select').value,
             audio_format: document.getElementById('audio-format').value,
             audio_bitrate: document.getElementById('audio-bitrate').value,
-            output_path: document.getElementById('download-path').value || undefined
         };
         
         const response = await apiCall('/api/download', 'POST', request);
@@ -636,14 +570,16 @@ function startStatusPolling() {
                 clearInterval(pollingInterval);
                 
                 if (status.status === 'completed') {
-                    // Show success state
+                    // Trigger browser download!
+                    if (status.download_url) {
+                        triggerBrowserDownload(status.download_url, status.filename);
+                    }
+                    
                     showSuccessState();
                     
-                    // Refresh history
                     await loadHistory();
                     renderRecentDownloads();
                     
-                    // Hide overlay after 2 seconds
                     setTimeout(() => {
                         hideOverlay();
                     }, 2000);
@@ -660,6 +596,21 @@ function startStatusPolling() {
     }, 500);
 }
 
+function triggerBrowserDownload(downloadUrl, filename) {
+    // Create a temporary link element and click it to trigger browser download
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = filename || 'download';
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+    
+    // Clean up
+    setTimeout(() => {
+        document.body.removeChild(link);
+    }, 1000);
+}
+
 function updateOverlayProgress(status) {
     const overlay = document.getElementById('download-overlay');
     const title = document.getElementById('overlay-title');
@@ -672,7 +623,7 @@ function updateOverlayProgress(status) {
     
     if (status.status === 'preparing') {
         title.textContent = 'Downloading...';
-        info.textContent = 'Preparing your download';
+        info.textContent = 'Preparing your download on the server';
         progressFill.style.width = '0%';
         progressText.textContent = '0%';
         details.style.display = 'none';
@@ -681,16 +632,16 @@ function updateOverlayProgress(status) {
         const speed = status.speed ? `${(status.speed / 1024 / 1024).toFixed(1)} MB/s` : '?';
         const eta = status.eta ? `${status.eta}s` : '?';
         
-        title.textContent = 'Downloading...';
-        info.textContent = 'Downloading your file';
+        title.textContent = 'Downloading to server...';
+        info.textContent = 'Downloading from YouTube to server';
         progressFill.style.width = `${progress}%`;
         progressText.textContent = `${progress}%`;
         details.style.display = 'flex';
         speedEl.textContent = speed;
         etaEl.textContent = eta;
     } else if (status.status === 'converting') {
-        title.textContent = 'Converting...';
-        info.textContent = 'Processing your file';
+        title.textContent = 'Processing...';
+        info.textContent = 'Converting your file on server';
         progressFill.style.width = '95%';
         progressText.textContent = '95%';
         details.style.display = 'flex';
@@ -708,7 +659,7 @@ function showSuccessState() {
     
     overlay.classList.add('success');
     title.textContent = 'Download Complete!';
-    info.textContent = 'Your file has been downloaded successfully';
+    info.textContent = 'Your file is being downloaded to your browser';
     progressFill.style.width = '100%';
     progressText.textContent = '100%';
 }
@@ -721,26 +672,166 @@ function hideOverlay() {
     }, 300);
 }
 
-// ===== FOLDER BROWSING =====
-function browseFolder() {
-    const path = prompt('Enter download folder path:', document.getElementById('download-path').value);
-    if (path) {
-        document.getElementById('download-path').value = path;
-    }
-}
-
-function browseSettingsFolder() {
-    const path = prompt('Enter default download folder path:', document.getElementById('setting-folder').value);
-    if (path) {
-        document.getElementById('setting-folder').value = path;
-    }
-}
-
 // ===== UTILITY FUNCTIONS =====
 function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+// ===== COOKIE MANAGEMENT =====
+async function checkCookieStatus() {
+    try {
+        const status = await apiCall('/api/cookies/status');
+        updateCookieUI(status.available);
+        return status.available;
+    } catch (error) {
+        console.error('Failed to check cookie status:', error);
+        const statusEl = document.getElementById('cookie-status');
+        if (statusEl) {
+            statusEl.className = 'cookie-status error';
+            statusEl.innerHTML = `
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <line x1="15" y1="9" x2="9" y2="15"/>
+                    <line x1="9" y1="9" x2="15" y2="15"/>
+                </svg>
+                <span>Could not check status</span>
+            `;
+        }
+        return false;
+    }
+}
+
+function updateCookieUI(available) {
+    const statusEl = document.getElementById('cookie-status');
+    const actionsEl = document.getElementById('cookie-actions');
+    
+    if (!statusEl) return;
+    
+    if (available) {
+        statusEl.className = 'cookie-status uploaded';
+        statusEl.innerHTML = `
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="20 6 9 17 4 12"/>
+            </svg>
+            <span>Cookies are active ✓ YouTube authentication is working</span>
+        `;
+        if (actionsEl) actionsEl.style.display = 'flex';
+        const submitBtn = document.getElementById('cookie-submit-btn');
+        const deleteBtn = document.getElementById('cookie-delete-btn');
+        if (submitBtn) submitBtn.style.display = 'none';
+        if (deleteBtn) deleteBtn.style.display = 'flex';
+    } else {
+        statusEl.className = 'cookie-status not-uploaded';
+        statusEl.innerHTML = `
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="15" y1="9" x2="9" y2="15"/>
+                <line x1="9" y1="9" x2="15" y2="15"/>
+            </svg>
+            <span>No cookies uploaded - YouTube may block downloads</span>
+        `;
+        if (actionsEl) actionsEl.style.display = 'flex';
+        const submitBtn = document.getElementById('cookie-submit-btn');
+        const deleteBtn = document.getElementById('cookie-delete-btn');
+        if (submitBtn) submitBtn.style.display = 'flex';
+        if (deleteBtn) deleteBtn.style.display = 'none';
+    }
+}
+
+// Setup cookie file input listener
+document.addEventListener('DOMContentLoaded', () => {
+    setTimeout(() => {
+        const fileInput = document.getElementById('cookie-file-input');
+        if (fileInput) {
+            fileInput.addEventListener('change', function() {
+                const fileNameEl = document.getElementById('cookie-file-name');
+                const actionsEl = document.getElementById('cookie-actions');
+                if (this.files && this.files.length > 0) {
+                    fileNameEl.textContent = this.files[0].name;
+                    if (actionsEl) actionsEl.style.display = 'flex';
+                    const submitBtn = document.getElementById('cookie-submit-btn');
+                    const deleteBtn = document.getElementById('cookie-delete-btn');
+                    if (submitBtn) submitBtn.style.display = 'flex';
+                    if (deleteBtn) deleteBtn.style.display = 'none';
+                } else {
+                    fileNameEl.textContent = 'No file selected';
+                }
+            });
+        }
+        
+        checkCookieStatus();
+    }, 100);
+});
+
+async function uploadCookies() {
+    const fileInput = document.getElementById('cookie-file-input');
+    const submitBtn = document.getElementById('cookie-submit-btn');
+    
+    if (!fileInput.files || fileInput.files.length === 0) {
+        alert('Please select a cookies.txt file first.');
+        return;
+    }
+    
+    const file = fileInput.files[0];
+    
+    if (!file.name.endsWith('.txt')) {
+        alert('Please select a .txt file (Netscape format cookies file).');
+        return;
+    }
+    
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<span>Uploading...</span>';
+    
+    try {
+        const formData = new FormData();
+        formData.append('file', file);
+        
+        const response = await fetch('/api/cookies/upload', {
+            method: 'POST',
+            body: formData
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Upload failed');
+        }
+        
+        updateCookieUI(true);
+        
+        fileInput.value = '';
+        document.getElementById('cookie-file-name').textContent = 'No file selected';
+        
+        alert('Cookies uploaded successfully! YouTube authentication is now active.');
+        
+    } catch (error) {
+        alert('Failed to upload cookies: ' + error.message);
+    } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = `
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="17 8 12 3 7 8"/>
+                <line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+            <span>Upload Cookies</span>
+        `;
+    }
+}
+
+async function deleteCookies() {
+    if (!confirm('Are you sure you want to delete the uploaded cookies?')) {
+        return;
+    }
+    
+    try {
+        await apiCall('/api/cookies/delete', 'POST');
+        updateCookieUI(false);
+        alert('Cookies deleted successfully.');
+    } catch (error) {
+        alert('Failed to delete cookies: ' + error.message);
+    }
 }
 
 // ===== PERIODIC REFRESH =====
@@ -749,4 +840,4 @@ setInterval(async () => {
         await loadHistory();
         renderRecentDownloads();
     }
-}, 30000); // Refresh every 30 seconds
+}, 30000);
