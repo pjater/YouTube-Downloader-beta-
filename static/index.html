@@ -456,6 +456,31 @@
                             </div>
                         </div>
 
+                        <!-- Import YouTube Cookies -->
+                        <div class="card settings-card">
+                            <h3 class="settings-title">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                                    <path d="M2 17l10 5 10-5"/>
+                                    <path d="M2 12l10 5 10-5"/>
+                                </svg>
+                                Import YouTube Cookies
+                            </h3>
+                            <div class="setting-item">
+                                <p class="setting-help-text">Upload your YouTube cookies to enable video downloads. YouTube requires authentication to prevent bot detection.</p>
+                            </div>
+                            <div class="setting-item">
+                                <button class="cookie-btn cookie-wizard-btn" onclick="openCookieWizard()" style="width: 100%;">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                        <polyline points="17 8 12 3 7 8"/>
+                                        <line x1="12" y1="3" x2="12" y2="15"/>
+                                    </svg>
+                                    <span>Import YouTube Cookies</span>
+                                </button>
+                            </div>
+                        </div>
+
                         <!-- YouTube Cookies Section -->
                         <div class="card settings-card">
                             <h3 class="settings-title">
@@ -544,6 +569,7 @@
                                 </details>
                             </div>
                         </div>
+
 
                         <!-- Save Button -->
                         <div class="save-section">
@@ -820,4 +846,3 @@
     <script src="/static/app.js"></script>
 </body>
 </html>
->>>>>>>
