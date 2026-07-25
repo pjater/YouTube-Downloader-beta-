@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
 YouTube Downloader Web App - Backend Server
+Downloads videos/audio and streams them directly to the client's browser.
 """
 
 import os
@@ -8,12 +9,15 @@ import sys
 import json
 import threading
 import uuid
+import shutil
+import time
+import re
 from pathlib import Path
 from datetime import datetime
 from typing import Optional, Dict, Any, List
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel
 import yt_dlp
 
@@ -22,14 +26,18 @@ BASE_DIR = Path(__file__).parent
 CONFIG_FILE = BASE_DIR / "downloader_config.json"
 HISTORY_FILE = BASE_DIR / "download_history.json"
 DOWNLOADS_DIR = BASE_DIR / "downloads"
+COOKIES_FILE = BASE_DIR / "cookies.txt"
 FFMPEG_PATH = BASE_DIR / "ffmpeg.exe"
 
 DOWNLOADS_DIR.mkdir(exist_ok=True)
 
+# Temporary download files - cleaned up after serving
+TEMP_DOWNLOADS: Dict[str, Dict[str, Any]] = {}
+TEMP_LOCK = threading.Lock()
+
 # Check ffmpeg
 ffmpeg_available = FFMPEG_PATH.exists()
 if not ffmpeg_available:
-    import shutil
     ffmpeg_available = shutil.which("ffmpeg") is not None
 if ffmpeg_available:
     print(f"FFmpeg found: {'system PATH' if not FFMPEG_PATH.exists() else FFMPEG_PATH}")
@@ -41,8 +49,6 @@ app = FastAPI(title="YouTube Downloader API")
 
 # Mount static files
 static_dir = BASE_DIR / "static"
-print(f"Static directory: {static_dir}")
-print(f"Static exists: {static_dir.exists()}")
 if static_dir.exists():
     app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
     print("Static files mounted")
@@ -58,14 +64,11 @@ class DownloadRequest(BaseModel):
     fps: str = "30"
     audio_format: str = "mp3"
     audio_bitrate: str = "192"
-    output_path: Optional[str] = None
 
 class VideoInfoRequest(BaseModel):
     url: str
 
 class ConfigUpdate(BaseModel):
-    download_folder: str
-    always_ask_location: bool = False
     default_video_quality: str = "best"
     default_video_format: str = "mp4"
     default_fps: str = "30"
@@ -76,21 +79,22 @@ class ConfigUpdate(BaseModel):
 active_downloads: Dict[str, Dict[str, Any]] = {}
 download_lock = threading.Lock()
 
-# ===== CONFIG MANAGEMENT =====
-def get_default_download_folder() -> str:
-    """Get platform-specific default download folder"""
-    # On Render/Linux: use the app's downloads directory
-    # On Windows: use the user's Downloads folder
-    if os.name == 'nt':
-        user_downloads = os.path.join(os.environ.get('USERPROFILE', ''), 'Downloads')
-        if os.path.isdir(user_downloads):
-            return user_downloads
-    return str(DOWNLOADS_DIR)
+# ===== COOKIE MANAGEMENT =====
+def get_yt_dlp_cookie_options() -> Dict[str, Any]:
+    """Get yt-dlp options for cookies, trying multiple methods."""
+    opts = {}
+    
+    if COOKIES_FILE.exists() and COOKIES_FILE.stat().st_size > 0:
+        print(f"Using cookies from: {COOKIES_FILE}")
+        opts['cookiefile'] = str(COOKIES_FILE)
+        return opts
+    
+    print("No cookies found. YouTube may still block requests.")
+    return opts
 
+# ===== CONFIG MANAGEMENT =====
 def load_config() -> Dict[str, Any]:
     default_config = {
-        "download_folder": get_default_download_folder(),
-        "always_ask_location": False,
         "default_video_quality": "best",
         "default_video_format": "mp4",
         "default_fps": "30",
@@ -137,7 +141,7 @@ def save_history(history: List[Dict[str, Any]]) -> None:
     except Exception:
         pass
 
-def add_to_history(title: str, mode: str, quality: str, format_type: str, fps: Optional[str] = None, bitrate: Optional[str] = None, path: str = ""):
+def add_to_history(title: str, mode: str, quality: str, format_type: str, fps: Optional[str] = None, bitrate: Optional[str] = None):
     history = load_history()
     entry = {
         "title": title or "Unknown",
@@ -147,13 +151,45 @@ def add_to_history(title: str, mode: str, quality: str, format_type: str, fps: O
         "fps": fps,
         "bitrate": bitrate,
         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "path": path
     }
     history.insert(0, entry)
     if len(history) > 50:
         history = history[:50]
     save_history(history)
     return entry
+
+# ===== GENERIC YT-DLP OPTIONS HELPER =====
+def get_base_ydl_opts(extra_opts: Optional[Dict] = None) -> Dict[str, Any]:
+    """Get base yt-dlp options with anti-detection measures and cookie support."""
+    opts = {
+        'quiet': True,
+        'no_warnings': True,
+        'extract_flat': False,
+        'ignoreerrors': False,
+        'no_color': True,
+        'socket_timeout': 30,
+        'retries': 10,
+        'fragment_retries': 10,
+        'extractor_retries': 5,
+        'file_access_retries': 5,
+        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+        'referer': 'https://www.youtube.com/',
+        'extractor_args': {
+            'youtube': {
+                'skip': ['dash', 'hls', 'webpage_download'],
+                'player_skip': ['js', 'configs', 'webpage'],
+                'player_client': ['android', 'web', 'ios'],
+            }
+        },
+    }
+    
+    cookie_opts = get_yt_dlp_cookie_options()
+    opts.update(cookie_opts)
+    
+    if extra_opts:
+        opts.update(extra_opts)
+    
+    return opts
 
 # ===== API ROUTES =====
 
@@ -165,7 +201,6 @@ async def root():
         return FileResponse(index_file)
     return JSONResponse({"error": "index.html not found"}, status_code=404)
 
-# Serve static files
 @app.get("/static/{file_path:path}")
 async def serve_static(file_path: str):
     """Serve static files"""
@@ -177,6 +212,7 @@ async def serve_static(file_path: str):
 @app.get("/api/config")
 async def get_config():
     config = load_config()
+    config['cookies_available'] = COOKIES_FILE.exists() and COOKIES_FILE.stat().st_size > 0
     return JSONResponse(config)
 
 @app.post("/api/config")
@@ -196,27 +232,61 @@ async def clear_history():
     save_history([])
     return JSONResponse({"status": "success", "message": "History cleared"})
 
+@app.post("/api/history/delete")
+async def delete_history_item(data: Dict[str, Any]):
+    index = data.get("index")
+    history = load_history()
+    if index is None or not isinstance(index, int) or index < 0 or index >= len(history):
+        raise HTTPException(status_code=404, detail="History item not found")
+    item = history.pop(index)
+    save_history(history)
+    return JSONResponse({"status": "success", "message": "Item deleted"})
+
+# ===== COOKIE UPLOAD ENDPOINTS =====
+@app.get("/api/cookies/status")
+async def get_cookie_status():
+    exists = COOKIES_FILE.exists() and COOKIES_FILE.stat().st_size > 0
+    size = COOKIES_FILE.stat().st_size if exists else 0
+    return JSONResponse({"available": exists, "size": size})
+
+@app.post("/api/cookies/upload")
+async def upload_cookies(file: UploadFile = File(...)):
+    try:
+        content = await file.read()
+        content_str = content.decode('utf-8', errors='ignore')
+        is_valid = (
+            content_str.strip().startswith('#') or 
+            '.youtube.com' in content_str or
+            'youtube' in content_str.lower()
+        )
+        if not is_valid:
+            raise HTTPException(status_code=400, detail="Invalid cookies file format. The file should be a Netscape-format cookies.txt file exported from your browser.")
+        with open(COOKIES_FILE, 'wb') as f:
+            f.write(content)
+        return JSONResponse({"status": "success", "message": "Cookies uploaded successfully! YouTube authentication is now active."})
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to upload cookies: {str(e)}")
+
+@app.post("/api/cookies/delete")
+async def delete_cookies():
+    if COOKIES_FILE.exists():
+        COOKIES_FILE.unlink()
+        return JSONResponse({"status": "success", "message": "Cookies deleted."})
+    return JSONResponse({"status": "success", "message": "No cookies to delete."})
+
+# ===== VIDEO INFO =====
 @app.post("/api/video-info")
 async def get_video_info(request: VideoInfoRequest):
     try:
-        # Try with minimal options first
-        ydl_opts = {
-            'quiet': True,
-            'no_warnings': True,
-            'extract_flat': False,
-            'ignoreerrors': False,
-            'no_color': True,
-            'socket_timeout': 30,
-            'retries': 3,
-            'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'referer': 'https://www.youtube.com/',
-        }
+        ydl_opts = get_base_ydl_opts({'extract_flat': False})
         
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(request.url, download=False, process=True)
             
             if not info:
-                raise HTTPException(status_code=400, detail="Could not extract video information. The video may not exist or is not available.")
+                raise HTTPException(status_code=400, detail="Could not extract video information.")
             
             title = info.get('title') or 'Unknown'
             uploader = info.get('uploader') or 'Unknown'
@@ -254,35 +324,30 @@ async def get_video_info(request: VideoInfoRequest):
         error_msg = str(e)
         print(f"Video info error: {error_msg}")
         
-        # Provide user-friendly error messages
         if "HTTP Error 429" in error_msg or "Too Many Requests" in error_msg:
             error_msg = "Too many requests. Please wait a moment and try again."
         elif "HTTP Error 403" in error_msg or "Forbidden" in error_msg:
-            error_msg = "Access denied. YouTube is blocking requests from this server. Please try again later."
+            error_msg = "Access denied. YouTube is blocking requests from this server."
         elif "HTTP Error 404" in error_msg:
             error_msg = "Video not found. Please check the URL and try again."
         elif "Private video" in error_msg:
             error_msg = "This video is private or unavailable."
         elif "not available" in error_msg.lower():
             error_msg = "Video not found or not available."
-        elif "Network" in error_msg or "Connection" in error_msg:
-            error_msg = "Network error. Please check your connection and try again."
+        elif "Sign in to confirm" in error_msg or "bot" in error_msg.lower():
+            error_msg = "YouTube requires authentication. Please upload your YouTube cookies (Settings → Upload Cookies) using a cookies.txt file exported from your browser."
+        elif "copyright" in error_msg.lower():
+            error_msg = "This video may be blocked due to copyright restrictions."
         else:
             error_msg = f"Could not extract video information. {error_msg}"
         
         raise HTTPException(status_code=400, detail=error_msg)
 
+
+# ===== DOWNLOAD (Stream to Browser) =====
 @app.post("/api/download")
 async def start_download(request: DownloadRequest):
     download_id = str(uuid.uuid4())
-    
-    if request.output_path:
-        output_path = Path(request.output_path)
-    else:
-        config = load_config()
-        output_path = Path(config.get("download_folder", str(DOWNLOADS_DIR)))
-    
-    output_path.mkdir(parents=True, exist_ok=True)
     
     with download_lock:
         active_downloads[download_id] = {
@@ -294,15 +359,27 @@ async def start_download(request: DownloadRequest):
             "speed": 0,
             "eta": 0,
             "title": "",
-            "error": None
+            "error": None,
+            "filename": None,
+            "download_url": None,
+            "filesize": 0,
         }
     
     def download_thread():
         try:
             if request.mode == "video":
-                download_video(download_id, request, output_path)
+                result = download_video(download_id, request)
             else:
-                download_audio(download_id, request, output_path)
+                result = download_audio(download_id, request)
+            
+            if result and "error" not in result:
+                # File is ready in TEMP_DOWNLOADS - generate download URL
+                with download_lock:
+                    if download_id in active_downloads:
+                        active_downloads[download_id]["status"] = "completed"
+                        active_downloads[download_id]["progress"] = 100
+                        active_downloads[download_id]["download_url"] = f"/api/download/{download_id}/file"
+                        active_downloads[download_id]["filename"] = result.get("filename", "download")
         except Exception as e:
             with download_lock:
                 if download_id in active_downloads:
@@ -314,7 +391,7 @@ async def start_download(request: DownloadRequest):
     
     return JSONResponse({"download_id": download_id, "status": "started"})
 
-def download_video(download_id: str, request: DownloadRequest, output_path: Path):
+def download_video(download_id: str, request: DownloadRequest) -> Optional[Dict]:
     try:
         with download_lock:
             active_downloads[download_id]["status"] = "downloading"
@@ -337,7 +414,11 @@ def download_video(download_id: str, request: DownloadRequest, output_path: Path
         if fps and fps != "30":
             format_selector = format_selector.replace("bestvideo", f"bestvideo[fps={fps}]")
         
-        downloaded_file_path = None
+        # Download to a temp ID-based filename to avoid path issues on Render
+        temp_filename = f"{download_id}.%(ext)s"
+        temp_path = str(DOWNLOADS_DIR / temp_filename)
+        
+        actual_filepath = [None]
         
         def progress_hook(d):
             if d["status"] == "downloading":
@@ -348,7 +429,6 @@ def download_video(download_id: str, request: DownloadRequest, output_path: Path
                         progress = int((downloaded / total) * 100)
                         speed = d.get('speed', 0) or 0
                         eta = d.get('eta', 0) or 0
-                        
                         with download_lock:
                             if download_id in active_downloads:
                                 active_downloads[download_id]["progress"] = progress
@@ -361,46 +441,65 @@ def download_video(download_id: str, request: DownloadRequest, output_path: Path
                     if download_id in active_downloads:
                         active_downloads[download_id]["progress"] = 95
                         active_downloads[download_id]["status"] = "converting"
-                nonlocal downloaded_file_path
-                downloaded_file_path = d.get('filename')
+                actual_filepath[0] = d.get('filename')
         
-        ydl_opts = {
+        ydl_opts = get_base_ydl_opts({
             'format': format_selector,
-            'outtmpl': str(output_path / '%(title)s.%(ext)s'),
+            'outtmpl': temp_path,
             'merge_output_format': fmt,
             'progress_hooks': [progress_hook],
-            'quiet': True,
-            'no_warnings': True,
-            'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'referer': 'https://www.youtube.com/',
-        }
+        })
         
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(request.url, download=True)
             title = info.get('title') or 'Unknown'
+        
+        # Find the actual downloaded file
+        if actual_filepath[0]:
+            dl_path = Path(actual_filepath[0])
+        else:
+            # Fallback: find by download_id prefix
+            dl_path = None
+            for f in DOWNLOADS_DIR.iterdir():
+                if f.name.startswith(download_id) and f.is_file():
+                    dl_path = f
+                    break
+        
+        if dl_path and dl_path.exists():
+            # Sanitize filename for browser download
+            safe_title = re.sub(r'[^\w\s\-_()\[\]]', '', title).strip() or f"video_{download_id[:8]}"
+            safe_filename = f"{safe_title}.{fmt}"
+            filesize = dl_path.stat().st_size
+            
+            with TEMP_LOCK:
+                TEMP_DOWNLOADS[download_id] = {
+                    "path": str(dl_path),
+                    "filename": safe_filename,
+                    "title": title,
+                    "mode": "video",
+                    "filesize": filesize,
+                    "created": time.time(),
+                }
             
             with download_lock:
-                active_downloads[download_id]["status"] = "completed"
-                active_downloads[download_id]["progress"] = 100
-                active_downloads[download_id]["title"] = title
+                if download_id in active_downloads:
+                    active_downloads[download_id]["filename"] = safe_filename
+                    active_downloads[download_id]["filesize"] = filesize
             
-            if downloaded_file_path:
-                file_ext = Path(downloaded_file_path).suffix
-            else:
-                file_ext = f".{fmt}"
-            file_name = f"{title}{file_ext}"
-            file_name = "".join(c for c in file_name if c.isalnum() or c in " ._-()").strip()
-            full_path = str(output_path / file_name)
+            add_to_history(title, "video", request.quality, fmt, fps=request.fps)
             
-            add_to_history(title, "video", request.quality, fmt, fps=request.fps, path=full_path)
-            
+            return {"filename": safe_filename, "filesize": filesize}
+        
+        raise Exception("Downloaded file not found on server.")
+        
     except Exception as e:
         with download_lock:
             if download_id in active_downloads:
                 active_downloads[download_id]["status"] = "error"
                 active_downloads[download_id]["error"] = str(e)
+        return None
 
-def download_audio(download_id: str, request: DownloadRequest, output_path: Path):
+def download_audio(download_id: str, request: DownloadRequest) -> Optional[Dict]:
     try:
         with download_lock:
             active_downloads[download_id]["status"] = "downloading"
@@ -409,18 +508,16 @@ def download_audio(download_id: str, request: DownloadRequest, output_path: Path
         bitrate = request.audio_bitrate
         
         codecs = {
-            "mp3": "libmp3lame",
-            "m4a": "aac",
-            "wav": "pcm_s16le",
-            "flac": "flac",
-            "ogg": "libvorbis",
-            "opus": "libopus",
-            "aac": "aac",
-            "wma": "wmav2"
+            "mp3": "libmp3lame", "m4a": "aac", "wav": "pcm_s16le",
+            "flac": "flac", "ogg": "libvorbis", "opus": "libopus",
+            "aac": "aac", "wma": "wmav2"
         }
         codec = codecs.get(audio_format, "libmp3lame")
         
-        downloaded_file_path = None
+        temp_filename = f"{download_id}.%(ext)s"
+        temp_path = str(DOWNLOADS_DIR / temp_filename)
+        
+        actual_filepath = [None]
         
         def progress_hook(d):
             if d["status"] == "downloading":
@@ -431,7 +528,6 @@ def download_audio(download_id: str, request: DownloadRequest, output_path: Path
                         progress = int((downloaded / total) * 100)
                         speed = d.get('speed', 0) or 0
                         eta = d.get('eta', 0) or 0
-                        
                         with download_lock:
                             if download_id in active_downloads:
                                 active_downloads[download_id]["progress"] = progress
@@ -444,126 +540,141 @@ def download_audio(download_id: str, request: DownloadRequest, output_path: Path
                     if download_id in active_downloads:
                         active_downloads[download_id]["progress"] = 95
                         active_downloads[download_id]["status"] = "converting"
-                nonlocal downloaded_file_path
-                downloaded_file_path = d.get('filename')
+                actual_filepath[0] = d.get('filename')
         
-        ydl_opts = {
+        ydl_opts = get_base_ydl_opts({
             'format': 'bestaudio/best',
-            'outtmpl': str(output_path / '%(title)s.%(ext)s'),
+            'outtmpl': temp_path,
             'postprocessors': [{
                 'key': 'FFmpegExtractAudio',
                 'preferredcodec': audio_format,
             }],
             'postprocessor_args': ['-codec:a', codec, '-b:a', f'{bitrate}k'],
             'progress_hooks': [progress_hook],
-            'quiet': True,
-            'no_warnings': True,
-            'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'referer': 'https://www.youtube.com/',
-        }
+        })
         
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(request.url, download=True)
             title = info.get('title') or 'Unknown'
+        
+        # Find the actual downloaded file
+        if actual_filepath[0]:
+            dl_path = Path(actual_filepath[0])
+        else:
+            dl_path = None
+            for f in DOWNLOADS_DIR.iterdir():
+                if f.name.startswith(download_id) and f.is_file():
+                    dl_path = f
+                    break
+        
+        if dl_path and dl_path.exists():
+            safe_title = re.sub(r'[^\w\s\-_()\[\]]', '', title).strip() or f"audio_{download_id[:8]}"
+            safe_filename = f"{safe_title}.{audio_format}"
+            filesize = dl_path.stat().st_size
+            
+            with TEMP_LOCK:
+                TEMP_DOWNLOADS[download_id] = {
+                    "path": str(dl_path),
+                    "filename": safe_filename,
+                    "title": title,
+                    "mode": "audio",
+                    "filesize": filesize,
+                    "created": time.time(),
+                }
             
             with download_lock:
-                active_downloads[download_id]["status"] = "completed"
-                active_downloads[download_id]["progress"] = 100
-                active_downloads[download_id]["title"] = title
+                if download_id in active_downloads:
+                    active_downloads[download_id]["filename"] = safe_filename
+                    active_downloads[download_id]["filesize"] = filesize
             
-            if downloaded_file_path:
-                file_path = str(downloaded_file_path)
-            else:
-                file_name = "".join(c for c in title if c.isalnum() or c in " ._-()").strip()
-                file_path = str(output_path / f"{file_name}.{audio_format}")
+            add_to_history(title, "audio", audio_format, audio_format, bitrate=f"{bitrate} kbps")
             
-            add_to_history(title, "audio", audio_format, audio_format, bitrate=f"{bitrate} kbps", path=file_path)
-            
+            return {"filename": safe_filename, "filesize": filesize}
+        
+        raise Exception("Downloaded file not found on server.")
+        
     except Exception as e:
         with download_lock:
             if download_id in active_downloads:
                 active_downloads[download_id]["status"] = "error"
                 active_downloads[download_id]["error"] = str(e)
+        return None
+
+
+@app.get("/api/download/{download_id}/file")
+async def download_file(download_id: str):
+    """Stream the downloaded file to the client's browser."""
+    with TEMP_LOCK:
+        if download_id not in TEMP_DOWNLOADS:
+            raise HTTPException(status_code=404, detail="Download file not found or expired")
+        temp_info = TEMP_DOWNLOADS[download_id]
+    
+    file_path = Path(temp_info["path"])
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="File not found on server")
+    
+    filename = temp_info["filename"]
+    filesize = file_path.stat().st_size
+    
+    def iterfile():
+        with open(file_path, "rb") as f:
+            yield from f
+        # Clean up after serving
+        try:
+            file_path.unlink(missing_ok=True)
+        except Exception:
+            pass
+        with TEMP_LOCK:
+            TEMP_DOWNLOADS.pop(download_id, None)
+    
+    return StreamingResponse(
+        iterfile(),
+        media_type="application/octet-stream",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Content-Length": str(filesize),
+        }
+    )
+
 
 @app.get("/api/download/{download_id}/status")
 async def get_download_status(download_id: str):
     with download_lock:
         if download_id not in active_downloads:
             raise HTTPException(status_code=404, detail="Download not found")
-        return JSONResponse(active_downloads[download_id])
+        status_data = dict(active_downloads[download_id])
+        return JSONResponse(status_data)
 
-@app.get("/api/downloads")
-async def get_active_downloads():
-    with download_lock:
-        return JSONResponse(list(active_downloads.values()))
 
-@app.post("/api/history/delete")
-async def delete_history_item(data: Dict[str, Any]):
-    index = data.get("index")
-    delete_file = data.get("delete_file", True)
-    
-    history = load_history()
-    if index is None or not isinstance(index, int) or index < 0 or index >= len(history):
-        raise HTTPException(status_code=404, detail="History item not found")
-    
-    item = history.pop(index)
-    
-    if delete_file and item.get("path"):
-        file_path = Path(item["path"])
-        if file_path.exists():
-            try:
-                os.remove(file_path)
-                print(f"Deleted file: {file_path}")
-            except Exception as e:
-                print(f"Failed to delete file {file_path}: {e}")
-        else:
-            print(f"File not found: {file_path}")
-    
-    save_history(history)
-    return JSONResponse({"status": "success", "message": "Item deleted"})
+# Cleanup task for expired temp files (runs every 5 minutes)
+def cleanup_temp_files():
+    while True:
+        time.sleep(300)
+        now = time.time()
+        with TEMP_LOCK:
+            expired = [did for did, info in TEMP_DOWNLOADS.items() if now - info["created"] > 600]
+            for did in expired:
+                try:
+                    p = Path(TEMP_DOWNLOADS[did]["path"])
+                    p.unlink(missing_ok=True)
+                except Exception:
+                    pass
+                TEMP_DOWNLOADS.pop(did, None)
 
-@app.get("/api/download/{filename}/path")
-async def get_download_path(filename: str):
-    for file in DOWNLOADS_DIR.iterdir():
-        if file.is_file() and file.name == filename:
-            return JSONResponse({"path": str(file.absolute())})
-    
-    history = load_history()
-    for item in history:
-        if item.get("path"):
-            p = Path(item["path"])
-            if p.exists() and p.name == filename:
-                return JSONResponse({"path": str(p.absolute())})
-    
-    raise HTTPException(status_code=404, detail="File not found")
+cleanup_thread = threading.Thread(target=cleanup_temp_files, daemon=True)
+cleanup_thread.start()
 
-@app.get("/api/history/{index}/path")
-async def get_history_item_path(index: int):
-    history = load_history()
-    if not history or index < 0 or index >= len(history):
-        raise HTTPException(status_code=404, detail="History item not found")
-    
-    item = history[index]
-    if item.get("path"):
-        p = Path(item["path"])
-        if p.exists():
-            return JSONResponse({"path": str(p.absolute())})
-    
-    raise HTTPException(status_code=404, detail="File path not found")
 
 # Catch-all route for SPA - MUST BE LAST
 @app.get("/{full_path:path}")
 async def catch_all(full_path: str):
-    """Catch all routes and serve index.html"""
-    # Skip API routes and static files
     if full_path.startswith("api/") or full_path.startswith("static/"):
         return JSONResponse({"error": "Not found"}, status_code=404)
-    
-    # Serve index.html for all other routes
     index_file = BASE_DIR / "static" / "index.html"
     if index_file.exists():
         return FileResponse(index_file)
     return JSONResponse({"error": "Not found"}, status_code=404)
+
 
 if __name__ == "__main__":
     import uvicorn
@@ -575,8 +686,9 @@ if __name__ == "__main__":
     print("YouTube Downloader Web App")
     print("=" * 50)
     print(f"Starting server on {host}:{port}")
-    print(f"Working directory: {BASE_DIR}")
-    print(f"Static files: {static_dir}")
+    print(f"Temp downloads dir: {DOWNLOADS_DIR}")
+    print(f"Cookies: {'AVAILABLE' if COOKIES_FILE.exists() and COOKIES_FILE.stat().st_size > 0 else 'NOT UPLOADED'}")
+    print("Downloads stream directly to client browser")
     print("=" * 50)
     
     try:
