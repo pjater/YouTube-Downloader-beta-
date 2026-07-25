@@ -313,22 +313,15 @@
                         </div>
                     </div>
 
-                    <!-- Download Location -->
-                    <div class="card location-card">
-                        <label class="card-label">DOWNLOAD LOCATION</label>
-                        <div class="location-input-wrapper">
-                            <svg class="input-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                    <!-- Download to Browser Info -->
+                    <div class="card info-card">
+                        <div class="info-row">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                <polyline points="7 10 12 15 17 10"/>
+                                <line x1="12" y1="15" x2="12" y2="3"/>
                             </svg>
-                            <input type="text" id="download-path" class="location-input" readonly>
-                            <button class="browse-btn" id="browse-btn">
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-                                    <line x1="12" y1="11" x2="12" y2="17"/>
-                                    <line x1="9" y1="14" x2="15" y2="14"/>
-                                </svg>
-                                <span>Browse</span>
-                            </button>
+                            <span>File will be downloaded directly to your browser</span>
                         </div>
                     </div>
 
@@ -339,7 +332,7 @@
                             <polyline points="7 10 12 15 17 10"/>
                             <line x1="12" y1="15" x2="12" y2="3"/>
                         </svg>
-                        <span>Download</span>
+                        <span>Download to Browser</span>
                     </button>
 
                     <!-- Status Bar -->
@@ -378,30 +371,6 @@
                     </header>
 
                     <div class="settings-grid">
-                        <!-- Download Settings -->
-                        <div class="card settings-card">
-                            <h3 class="settings-title">
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-                                </svg>
-                                Download Settings
-                            </h3>
-                            <div class="setting-item">
-                                <label class="setting-label">Default download folder</label>
-                                <div class="setting-input-group">
-                                    <input type="text" id="setting-folder" class="setting-input">
-                                    <button class="browse-btn-small" onclick="browseSettingsFolder()">Browse</button>
-                                </div>
-                            </div>
-                            <div class="setting-item">
-                                <label class="checkbox-label">
-                                    <input type="checkbox" id="setting-always-ask">
-                                    <span class="checkbox-custom"></span>
-                                    <span>Always ask where to save</span>
-                                </label>
-                            </div>
-                        </div>
-
                         <!-- Video Settings -->
                         <div class="card settings-card">
                             <h3 class="settings-title">
@@ -484,6 +453,85 @@
                                     <option value="opus">OPUS</option>
                                     <option value="aac">AAC</option>
                                 </select>
+                            </div>
+                        </div>
+
+                        <!-- YouTube Cookies Section -->
+                        <div class="card settings-card">
+                            <h3 class="settings-title">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                                    <path d="M2 17l10 5 10-5"/>
+                                    <path d="M2 12l10 5 10-5"/>
+                                </svg>
+                                YouTube Authentication (Cookies)
+                            </h3>
+                            <div class="setting-item">
+                                <label class="setting-label">Why do I need this?</label>
+                                <p class="setting-help-text">YouTube now requires authentication to download videos. Export your YouTube cookies from your browser and upload them here.</p>
+                            </div>
+                            <div class="setting-item">
+                                <label class="setting-label">Cookie status</label>
+                                <div id="cookie-status" class="cookie-status not-uploaded">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <circle cx="12" cy="12" r="10"/>
+                                        <line x1="15" y1="9" x2="9" y2="15"/>
+                                        <line x1="9" y1="9" x2="15" y2="15"/>
+                                    </svg>
+                                    <span id="cookie-status-text">Checking...</span>
+                                </div>
+                            </div>
+                            <div class="setting-item">
+                                <label class="setting-label">Upload cookies.txt</label>
+                                <div class="cookie-upload-group">
+                                    <input type="file" id="cookie-file-input" accept=".txt" style="display: none;">
+                                    <button class="browse-btn-small" id="cookie-upload-btn" onclick="document.getElementById('cookie-file-input').click()">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                            <polyline points="17 8 12 3 7 8"/>
+                                            <line x1="12" y1="3" x2="12" y2="15"/>
+                                        </svg>
+                                        <span>Choose File</span>
+                                    </button>
+                                    <span id="cookie-file-name" class="cookie-file-name">No file selected</span>
+                                </div>
+                            </div>
+                            <div class="setting-item cookie-actions" id="cookie-actions" style="display: none;">
+                                <button class="cookie-btn cookie-upload-btn" id="cookie-submit-btn" onclick="uploadCookies()">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                        <polyline points="17 8 12 3 7 8"/>
+                                        <line x1="12" y1="3" x2="12" y2="15"/>
+                                    </svg>
+                                    <span>Upload Cookies</span>
+                                </button>
+                                <button class="cookie-btn cookie-delete-btn" id="cookie-delete-btn" onclick="deleteCookies()">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <polyline points="3 6 5 6 21 6"/>
+                                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                                    </svg>
+                                    <span>Delete Cookies</span>
+                                </button>
+                            </div>
+                            <div class="setting-item">
+                                <details class="cookie-help">
+                                    <summary>How to export cookies from your browser</summary>
+                                    <div class="cookie-help-steps">
+                                        <p><strong>Option 1: Using a browser extension (Recommended)</strong></p>
+                                        <ol>
+                                            <li>Install the "Get cookies.txt LOCALLY" extension for <a href="https://chrome.google.com/webstore/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc" target="_blank">Chrome</a> or <a href="https://addons.mozilla.org/en-US/firefox/addon/cookies-txt/" target="_blank">Firefox</a></li>
+                                            <li>Go to YouTube and make sure you're logged in</li>
+                                            <li>Click the extension icon and export cookies as "cookies.txt"</li>
+                                            <li>Upload the file here</li>
+                                        </ol>
+                                        <p><strong>Option 2: Using a bookmarklet</strong></p>
+                                        <ol>
+                                            <li>Go to <a href="https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies" target="_blank">this guide</a></li>
+                                            <li>Follow the instructions to export cookies</li>
+                                            <li>Upload the cookies.txt file here</li>
+                                        </ol>
+                                    </div>
+                                </details>
                             </div>
                         </div>
 
